@@ -167,12 +167,66 @@ Devuelve ÚNICAMENTE un bloque de código JSON con este formato exacto:
 }}
 ```"""
 
+    MODEL_ALIASES = {
+        "haiku": "claude-haiku-5-5",
+        "claude": "claude-haiku-5-5",
+        "claude-haiku": "claude-haiku-5-5",
+        "deepseek": "deepseek-v4-pro",
+        "deepseek-pro": "deepseek-v4-pro",
+        "kimi": "kimi-k2.7-code",
+        "kimi-code": "kimi-k2.7-code",
+        "kimi-pro": "kimi-k3.1-pro",
+        "minimax": "minimax-m3.1-flash",
+        "qwen": "qwen-3.7-plus",
+        "gpt": "gpt-6-luna",
+    }
+
+    @classmethod
+    def resolve_model_name(cls, m: Optional[str] = None) -> str:
+        if m and m.strip():
+            clean = m.strip().lower()
+            return cls.MODEL_ALIASES.get(clean, m.strip())
+        return os.getenv("OPENCODE_MODEL", "claude-haiku-5-5").strip()
+
+    @staticmethod
+    def get_api_key() -> Optional[str]:
+        return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
+    def generate_episode_with_gemini(self, location: Optional[str] = None, free_theme: Optional[str] = None) -> Dict[str, Any]:
+        """Respaldo oficial con Google Gemini API si Opencode no está disponible."""
+        gemini_key = self.get_api_key()
+        if not gemini_key:
+            raise RuntimeError("GEMINI_API_KEY no configurada.")
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=gemini_key)
+        prompt = self.build_prompt(location=location, free_theme=free_theme)
+        model_to_use = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+
+        logger.info(f"✨ Generando guion para [{self.display_name}] usando Google Gemini API ({model_to_use})...")
+        response = client.models.generate_content(
+            model=model_to_use,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.8,
+            )
+        )
+        raw_text = response.text.strip()
+        cleaned = re.sub(r"^```json\s*", "", raw_text, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+        return json.loads(cleaned)
+
     def generate_episode(self, location: Optional[str] = None, model: Optional[str] = None, free_theme: Optional[str] = None) -> Dict[str, Any]:
         api_key = self.get_opencode_key()
         if not api_key:
-            raise RuntimeError("OPENCODE_API_KEY no configurada en .env.")
+            if self.get_api_key():
+                logger.warning("OPENCODE_API_KEY no detectada. Usando Gemini API de respaldo...")
+                return self.generate_episode_with_gemini(location=location, free_theme=free_theme)
+            raise RuntimeError("Se requiere OPENCODE_API_KEY o GEMINI_API_KEY en .env para generar guiones.")
 
-        resolved_model = model or os.getenv("OPENCODE_MODEL", "claude-haiku-5-5")
+        resolved_model = self.resolve_model_name(model)
         prompt = self.build_prompt(location=location, free_theme=free_theme)
 
         logger.info(f"✨ Generando guion para [{self.display_name}] usando {resolved_model}...")
@@ -196,7 +250,7 @@ Devuelve ÚNICAMENTE un bloque de código JSON con este formato exacto:
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {api_key}",
-                "User-Agent": "CuyFlowAutomation/2.0",
+                "User-Agent": "FlowVideoAutomation/2.0",
             },
             method="POST",
         )
@@ -219,10 +273,18 @@ Devuelve ÚNICAMENTE un bloque de código JSON con este formato exacto:
         class DynamicStoryGeneratorAdapter:
             @staticmethod
             def resolve_model_name(m: Optional[str] = None) -> str:
-                return m or "claude-haiku-5-5"
+                return instance.resolve_model_name(m)
 
             @staticmethod
             def generate_episode(location: Optional[str] = None, model: Optional[str] = None, free_theme: Optional[str] = None) -> Dict[str, Any]:
                 return instance.generate_episode(location=location, model=model, free_theme=free_theme)
+
+            @staticmethod
+            def generate_episode_with_gemini(location: Optional[str] = None, free_theme: Optional[str] = None) -> Dict[str, Any]:
+                return instance.generate_episode_with_gemini(location=location, free_theme=free_theme)
+
+            @staticmethod
+            def get_api_key() -> Optional[str]:
+                return instance.get_api_key()
 
         return DynamicStoryGeneratorAdapter

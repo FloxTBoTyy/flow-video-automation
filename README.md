@@ -152,6 +152,30 @@ Si estás creando contenido para una marca, canal o propiedad intelectual privad
 
 ---
 
+## 🧠 Modelos de IA Soportados y Roadmap
+
+### 🟢 Soportados Actualmente (Integrados):
+
+1. **Vía Opencode Go API** (`OPENCODE_API_KEY` en `.env`):
+   - `-m kimi`: Moonshot Kimi (`kimi-k2.7-code`, `kimi-k3.1-pro`) — Respuestas ultra dinámicas y gran ingenio narrativo.
+   - `-m deepseek`: DeepSeek (`deepseek-v4-pro`) — Excelente coherencia estructural y lógica dramática.
+   - `-m haiku` o `-m claude`: Anthropic Claude (`claude-haiku-5-5`) — Guiones de alta retención para TikTok.
+   - `-m minimax`: MiniMax (`minimax-m3.1-flash`) — Generación rápida y concisa.
+   - `-m qwen`: Alibaba Qwen (`qwen-3.7-plus`).
+
+2. **Vía Google Gemini Oficial** (`GEMINI_API_KEY` en `.env`):
+   - Integración nativa con `google-genai` SDK (`gemini-2.5-flash`, `gemini-2.0-flash`).
+   - Funciona como generador principal o como respaldo automático si Opencode no responde.
+
+### 🔜 Próximas Versiones (Roadmap):
+
+- [ ] **OpenAI SDK Directo**: Integración nativa con endpoints de OpenAI (`gpt-4o`, `gpt-4o-mini`).
+- [ ] **Anthropic SDK Oficial**: Conexión directa mediante clave de Anthropic (`claude-3-5-sonnet`).
+- [ ] **Modelos Locales**: Soporte para ejecutar LLMs locales en tu máquina sin costo de API mediante **Ollama** o **vLLM** (`Llama 3`, `Mistral`, `DeepSeek-R1`).
+- [ ] **Generación de Voz (TTS)**: Inyección automática de pistas de audio sincronizadas con ElevenLabs.
+
+---
+
 ## 🤝 Contribuciones
 
 Las contribuciones son bienvenidas. Si deseas colaborar:
