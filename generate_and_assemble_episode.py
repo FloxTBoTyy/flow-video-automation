@@ -644,15 +644,24 @@ async def run_full_pipeline(
 
         logger.info(f"✨ Generando historia para [{archetype_cfg['display_name']}] usando {resolved_provider.upper()} ({resolved_model or 'modelo por defecto'})...")
         try:
-            import inspect
-            sig = inspect.signature(story_gen.generate_episode)
-            if "provider" in sig.parameters:
-                ep_data = story_gen.generate_episode(pref, model=resolved_model, free_theme=free_theme, provider=resolved_provider)
+            if hasattr(story_gen, "generate_episode"):
+                import inspect
+                sig = inspect.signature(story_gen.generate_episode)
+                if "provider" in sig.parameters:
+                    ep_data = story_gen.generate_episode(pref, model=resolved_model, free_theme=free_theme, provider=resolved_provider)
+                else:
+                    ep_data = story_gen.generate_episode(pref, model=resolved_model, free_theme=free_theme)
+            elif hasattr(story_gen, "generate_episode_with_opencode") and resolved_provider == "opencode":
+                ep_data = story_gen.generate_episode_with_opencode(pref, model=resolved_model, free_theme=free_theme)
+            elif hasattr(story_gen, "generate_episode_with_gemini") and resolved_provider == "gemini":
+                ep_data = story_gen.generate_episode_with_gemini(pref, free_theme=free_theme)
+            elif hasattr(story_gen, "generate_episode_with_opencode"):
+                ep_data = story_gen.generate_episode_with_opencode(pref, model=resolved_model, free_theme=free_theme)
             else:
-                ep_data = story_gen.generate_episode(pref, model=resolved_model, free_theme=free_theme)
+                raise AttributeError(f"El generador {story_gen} no tiene un método compatible de generación.")
         except Exception as e:
             # Fallback con Gemini API si está soportado por el generador y el proveedor principal falló
-            if hasattr(story_gen, "generate_episode_with_gemini") and getattr(story_gen, "get_api_key", lambda: False)():
+            if hasattr(story_gen, "generate_episode_with_gemini") and getattr(story_gen, "get_api_key", lambda: False)() and resolved_provider != "gemini":
                 logger.warning(f"Reintentando historia con API oficial de Gemini: {e}")
                 ep_data = story_gen.generate_episode_with_gemini(pref, free_theme=free_theme)
             else:
