@@ -126,6 +126,78 @@ python generate_and_assemble_episode.py random -a explorer --no-assemble --no-pu
 
 ---
 
+## 🎭 Cómo Crear tu Propio Personaje y Arquetipo (Sin Código)
+
+Cualquier usuario puede inventar sus propios personajes, universos e historias en cuestión de segundos **sin tocar una sola línea de código Python**. Solo necesitas 3 pasos:
+
+### 1️⃣ Paso 1: Crea el Personaje en Google Flow
+1. Abre tu proyecto en [Google Flow](https://flow.google.com).
+2. Ve a la pestaña **Personajes (*Characters*)** y pulsa en **Crear Personaje**.
+3. Dale un nombre identificativo (por ejemplo: `vikingo 1`, `samurai 1` o `mago 1`).
+4. Genera o sube las imágenes de referencia y guarda la tarjeta del personaje.
+
+### 2️⃣ Paso 2: Duplica la plantilla y rellena tu archivo JSON
+En la carpeta `archetypes/`, haz una copia de [`archetypes/template.json`](archetypes/template.json):
+
+```bash
+cp archetypes/template.json archetypes/vikingo.json
+```
+
+Abre `archetypes/vikingo.json` y personaliza los campos:
+
+```json
+{
+  "key": "vikingo",
+  "display_name": "Ragnar el Navegante Nórdico",
+  "character_name": "vikingo 1",
+  "video_prefix": "vikingo",
+  "character_dna": {
+    "name": "Ragnar",
+    "description": "Un imponente guerrero nórdico de 30 años con barba trenzada, túnica de lino gris y capa de piel con broche de plata, portando botas de cuero.",
+    "acting": "Firme, intrépido y observador. Camina con paso seguro sobre cubiertas de drakkar y costas rocosas, analizando el horizonte con mirada penetrante."
+  },
+  "world_rules": {
+    "setting": "Fiordos nórdicos envueltos en niebla matutina, aldeas vikingas junto al mar y costas escarpadas.",
+    "tone": "Expedición marítima a contrarreloj de 30 segundos, tensión de sigilo, olas rugiendo y misterio legendario."
+  },
+  "visual_style": "Estilo cinematográfico fotorrealista de acción real, lente óptica de 35 mm f/1.8, iluminación nórdica fría con sutiles rayos dorados, detalles ultra nítidos.",
+  "tiktok_default_caption": "¡Expedición vikinga hacia tierras desconocidas! ⚔️🌊🛡️",
+  "tiktok_default_hashtags": ["#Vikingos", "#Historia", "#Aventura", "#Cine", "#Nórdico"]
+}
+```
+
+#### 📋 Guía rápida de los campos:
+| Campo | Tipo | ¿Para qué sirve? |
+| :--- | :--- | :--- |
+| `key` | String | Identificador corto para la terminal (ej: `vikingo` -> se usa con `-a vikingo`). |
+| `display_name` | String | Nombre visible que aparecerá en los logs y consola del bot. |
+| `character_name` | String | **Nombre exacto** que le diste al personaje en Google Flow para que el bot active su chip en cada toma. |
+| `video_prefix` | String | Prefijo para nombrar los archivos descargados (ej: `vikingo_costa_30s.mp4`). |
+| `character_dna.name` | String | Nombre narrativo del personaje para los diálogos y guion del LLM. |
+| `character_dna.description` | String | Vestuario y rasgos visuales que se inyectan en los prompts de Flow. |
+| `character_dna.acting` | String | Biomecánica, actitud y forma de moverse del personaje. |
+| `world_rules.setting` | String | Escenarios, locaciones y atmósfera típica de su universo. |
+| `world_rules.tone` | String | Ritmo narrativo y nivel de suspenso/adrenalina para los guiones de TikTok. |
+| `visual_style` | String | Lente de cámara, iluminación y estilo de render en Google Flow. |
+| `tiktok_default_caption` | String | Texto sugerido por defecto para la publicación en TikTok. |
+| `tiktok_default_hashtags` | Array | Lista de hashtags recomendados para el video. |
+
+### 3️⃣ Paso 3: ¡Listo! Ejecuta el bot con tu nuevo personaje
+El sistema detectará tu archivo `.json` de inmediato sin reiniciar nada:
+
+```bash
+# Generar una aventura al azar de tu nuevo personaje:
+python generate_and_assemble_episode.py random -a vikingo
+
+# Guiar la historia con una temática libre específica (-ft):
+python generate_and_assemble_episode.py random -a vikingo -ft "Llegada sigilosa a una costa envuelta en niebla buscando un cofre antiguo"
+
+# Escoger proveedor y modelo (Gemini, OpenAI, Opencode):
+python generate_and_assemble_episode.py random -a vikingo -p openai -m gpt-4o-mini
+```
+
+---
+
 ## ⚙️ Opciones de Línea de Comandos (CLI)
 
 | Parámetro | Alias | Descripción |
