@@ -70,8 +70,10 @@ Abre `archetypes/vikingo.json` y personaliza los campos:
 # Generar un episodio al azar de tu nuevo personaje:
 python generate_and_assemble_episode.py random -a vikingo
 
-# Generar un episodio eligiendo el modelo de IA (kimi, deepseek, haiku, claude):
-python generate_and_assemble_episode.py random -a vikingo -m kimi -ft "Llegada sigilosa a una costa envuelta en niebla buscando un cofre antiguo"
+# Generar un episodio eligiendo el proveedor y modelo de IA:
+python generate_and_assemble_episode.py random -a vikingo -p gemini
+python generate_and_assemble_episode.py random -a vikingo -p openai -m gpt-4o-mini
+python generate_and_assemble_episode.py random -a vikingo -p opencode -m kimi -ft "Llegada sigilosa a una costa envuelta en niebla buscando un cofre antiguo"
 
 # Generar solo ciertas tomas y sin publicar a TikTok:
 python generate_and_assemble_episode.py random -a vikingo --scenes 1,2 --no-publish

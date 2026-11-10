@@ -132,7 +132,8 @@ python generate_and_assemble_episode.py random -a explorer --no-assemble --no-pu
 | :--- | :--- | :--- |
 | `-a` | `--archetype` | Arquetipo a utilizar: `explorer`, `cyberpunk`, o tu propio archivo JSON en `archetypes/` (por defecto: `explorer`). |
 | `--list` | | Muestra todos los arquetipos disponibles en el sistema. |
-| `-m` | `--model` | Modelo de LLM: `kimi`, `haiku`, `claude`, `deepseek`, etc. |
+| `-p` | `--provider` | Proveedor de IA: `gemini`, `opencode`, `openai`, `anthropic` (por defecto: `AI_PROVIDER` en `.env` o auto-detectado). |
+| `-m` | `--model` | Modelo de IA a utilizar (ej: `gemini-2.5-flash`, `kimi`, `deepseek`, `gpt-4o-mini`, `sonnet`). |
 | `-ft` | `--theme`, `--free-theme` | Premisa o tema libre para guiar la historia generada por la IA. |
 | `-s` | `--scenes`, `--tomas` | Tomas a generar separadas por comas (ej: `1,2` o `2`). |
 | `-f` | `--file`, `--episode-file` | Carga un archivo JSON con la historia sin llamar al LLM. |
@@ -152,27 +153,49 @@ Si estás creando contenido para una marca, canal o propiedad intelectual privad
 
 ---
 
-## 🧠 Modelos de IA Soportados y Roadmap
+## 🧠 Proveedores y Modelos de IA Soportados
 
-### 🟢 Soportados Actualmente (Integrados):
+El sistema cuenta con un motor multi-proveedor universal. Puedes elegir qué IA generará los guiones mediante la variable `AI_PROVIDER` en tu `.env` o mediante el parámetro `-p / --provider` en la línea de comandos.
 
-1. **Vía Opencode Go API** (`OPENCODE_API_KEY` en `.env`):
-   - `-m kimi`: Moonshot Kimi (`kimi-k2.7-code`, `kimi-k3.1-pro`) — Respuestas ultra dinámicas y gran ingenio narrativo.
-   - `-m deepseek`: DeepSeek (`deepseek-v4-pro`) — Excelente coherencia estructural y lógica dramática.
-   - `-m haiku` o `-m claude`: Anthropic Claude (`claude-haiku-5-5`) — Guiones de alta retención para TikTok.
-   - `-m minimax`: MiniMax (`minimax-m3.1-flash`) — Generación rápida y concisa.
-   - `-m qwen`: Alibaba Qwen (`qwen-3.7-plus`).
+### 🔌 Proveedores Integrados:
 
-2. **Vía Google Gemini Oficial** (`GEMINI_API_KEY` en `.env`):
-   - Integración nativa con `google-genai` SDK (`gemini-2.5-flash`, `gemini-2.0-flash`).
-   - Funciona como generador principal o como respaldo automático si Opencode no responde.
+1. **Google Gemini Oficial** (`-p gemini` o `AI_PROVIDER=gemini`):
+   - Integración nativa con Google AI Studio mediante el SDK `google-genai`.
+   - **Modelos:** `gemini-2.5-flash` (por defecto), `gemini-2.0-flash`, `gemini-1.5-pro`.
+   - Ideal para creadores que buscan rapidez, excelente creatividad y plan gratuito en AI Studio.
 
-### 🔜 Próximas Versiones (Roadmap):
+2. **Opencode Go** (`-p opencode` o `AI_PROVIDER=opencode`):
+   - Plataforma multimodelo de alta velocidad.
+   - **Modelos disponibles:**
+     - `-m kimi`: Moonshot Kimi (`kimi-k2.7-code`, `kimi-k3.1-pro`).
+     - `-m deepseek`: DeepSeek (`deepseek-v4-pro`).
+     - `-m haiku` o `-m claude`: Anthropic Claude (`claude-haiku-5-5`).
+     - `-m minimax`: MiniMax (`minimax-m3.1-flash`).
+     - `-m qwen`: Alibaba Qwen (`qwen-3.7-plus`).
 
-- [ ] **OpenAI SDK Directo**: Integración nativa con endpoints de OpenAI (`gpt-4o`, `gpt-4o-mini`).
-- [ ] **Anthropic SDK Oficial**: Conexión directa mediante clave de Anthropic (`claude-3-5-sonnet`).
-- [ ] **Modelos Locales**: Soporte para ejecutar LLMs locales en tu máquina sin costo de API mediante **Ollama** o **vLLM** (`Llama 3`, `Mistral`, `DeepSeek-R1`).
-- [ ] **Generación de Voz (TTS)**: Inyección automática de pistas de audio sincronizadas con ElevenLabs.
+3. **OpenAI Oficial** (`-p openai` o `AI_PROVIDER=openai`):
+   - Conexión directa con la API oficial de OpenAI (`OPENAI_API_KEY`).
+   - **Modelos:** `gpt-4o-mini` (por defecto), `gpt-4o`, `o3-mini`.
+
+4. **Anthropic Claude Oficial** (`-p anthropic` o `AI_PROVIDER=anthropic`):
+   - Conexión directa con la API oficial de Anthropic (`ANTHROPIC_API_KEY`).
+   - **Modelos:** `claude-3-5-haiku-20241022` (por defecto), `claude-3-5-sonnet-20241022`.
+
+### 💡 Ejemplos de Uso:
+
+```bash
+# Usar Google Gemini como proveedor:
+python generate_and_assemble_episode.py random -a explorer -p gemini
+
+# Usar OpenAI con GPT-4o Mini:
+python generate_and_assemble_episode.py random -a explorer -p openai -m gpt-4o-mini
+
+# Usar Opencode con Kimi:
+python generate_and_assemble_episode.py random -a explorer -p opencode -m kimi
+
+# Usar Anthropic Claude Oficial:
+python generate_and_assemble_episode.py random -a explorer -p anthropic -m sonnet
+```
 
 ---
 

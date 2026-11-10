@@ -574,6 +574,7 @@ async def run_full_pipeline(
     episode_file: Optional[str] = None,
     resume_last: bool = False,
     no_assemble: bool = False,
+    provider: Optional[str] = None,
 ):
     from config_archetypes import ArchetypeRegistry
     archetype_cfg = ArchetypeRegistry.get_archetype_config(archetype)
@@ -626,12 +627,31 @@ async def run_full_pipeline(
             await p.stop()
             return
 
-        resolved_model = story_gen.resolve_model_name(model) if hasattr(story_gen, "resolve_model_name") else model
-        logger.info(f"✨ Generando historia para [{archetype_cfg['display_name']}] usando {resolved_model or 'modelo configurado'}...")
+        if hasattr(story_gen, "resolve_provider"):
+            resolved_provider = story_gen.resolve_provider(provider, model)
+        else:
+            resolved_provider = provider or os.getenv("AI_PROVIDER", "opencode")
+
+        if hasattr(story_gen, "resolve_model_name"):
+            import inspect
+            sig_m = inspect.signature(story_gen.resolve_model_name)
+            if "provider" in sig_m.parameters:
+                resolved_model = story_gen.resolve_model_name(model, provider=resolved_provider)
+            else:
+                resolved_model = story_gen.resolve_model_name(model)
+        else:
+            resolved_model = model
+
+        logger.info(f"✨ Generando historia para [{archetype_cfg['display_name']}] usando {resolved_provider.upper()} ({resolved_model or 'modelo por defecto'})...")
         try:
-            ep_data = story_gen.generate_episode(pref, model=resolved_model, free_theme=free_theme)
+            import inspect
+            sig = inspect.signature(story_gen.generate_episode)
+            if "provider" in sig.parameters:
+                ep_data = story_gen.generate_episode(pref, model=resolved_model, free_theme=free_theme, provider=resolved_provider)
+            else:
+                ep_data = story_gen.generate_episode(pref, model=resolved_model, free_theme=free_theme)
         except Exception as e:
-            # Fallback con Gemini API si está soportado por el generador y Opencode falla
+            # Fallback con Gemini API si está soportado por el generador y el proveedor principal falló
             if hasattr(story_gen, "generate_episode_with_gemini") and getattr(story_gen, "get_api_key", lambda: False)():
                 logger.warning(f"Reintentando historia con API oficial de Gemini: {e}")
                 ep_data = story_gen.generate_episode_with_gemini(pref, free_theme=free_theme)
@@ -843,6 +863,7 @@ if __name__ == "__main__":
     parser.add_argument("--scenes", "-s", "--tomas", type=str, default=None, help="Tomas o escenas específicas a generar separadas por comas (ej: '1,2' o '2' o '1'). Por defecto: todas (1,2,3).")
     parser.add_argument("--file", "--episode-file", "-f", type=str, default=None, help="Ruta a un archivo JSON con la historia completa (ej: 'sugar_cube_episode.json'). Evita llamar a la IA.")
     parser.add_argument("--resume", "--reuse-last", action="store_true", help="Reutiliza la última historia guardada en caché (last_episode_<arquetipo>.json).")
+    parser.add_argument("--provider", "-p", type=str, default=None, choices=["gemini", "opencode", "openai", "anthropic"], help="Proveedor de IA: 'gemini', 'opencode', 'openai', 'anthropic' (por defecto: auto-detectado o AI_PROVIDER en .env)")
     parser.add_argument("--no-assemble", "--skip-assemble", action="store_true", help="Solo generar los clips en Flow sin ensamblarlos en la línea de tiempo ni exportar.")
 
     args = parser.parse_args()
@@ -886,6 +907,8 @@ if __name__ == "__main__":
     print(f"📍 Destino/Entorno: {preferred or 'Al azar con IA'}")
     if args.free_theme:
         print(f"🎯 Tema libre sugerido (-ft): '{args.free_theme}'")
+    if args.provider:
+        print(f"🔌 Proveedor de IA seleccionado (-p): {args.provider.upper()}")
     if selected_model:
         print(f"🧠 Modelo de IA seleccionado: {selected_model}")
     if scenes_filter_list:
@@ -912,4 +935,5 @@ if __name__ == "__main__":
         episode_file=args.file,
         resume_last=args.resume,
         no_assemble=args.no_assemble,
+        provider=args.provider,
     ))

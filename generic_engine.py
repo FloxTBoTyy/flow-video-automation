@@ -1,6 +1,12 @@
 """Motor genérico de historias y prompts para arquetipos personalizados definidos por el usuario.
 Permite a cualquier usuario crear sus propios personajes y universos en Google Flow
 mediante un archivo JSON sin tocar una sola línea de código Python.
+
+Soporta múltiples proveedores de IA:
+- Google Gemini (Oficial vía SDK o REST)
+- Opencode Go (Kimi, DeepSeek, Haiku, Qwen, MiniMax)
+- OpenAI Oficial (gpt-4o, gpt-4o-mini, o3-mini)
+- Anthropic Claude Oficial (claude-3-5-sonnet, claude-3-5-haiku)
 """
 
 import os
@@ -13,6 +19,7 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger("GenericArchetypeEngine")
 
+
 class GenericPromptBuilder:
     """Constructor dinámico de prompts cinematográficos basado en el archivo JSON del arquetipo."""
 
@@ -20,7 +27,10 @@ class GenericPromptBuilder:
         self.config = config
         self.key = config.get("key", "custom")
         self.character_dna = config.get("character_dna", {})
-        self.visual_style = config.get("visual_style", "High-end photorealistic live-action documentary style, 35mm optical lens f/1.8.")
+        self.visual_style = config.get(
+            "visual_style",
+            "High-end photorealistic live-action documentary style, 35mm optical lens f/1.8."
+        )
 
     def sanitize_scene_text(self, text: str) -> str:
         clean = text or ""
@@ -39,7 +49,7 @@ class GenericPromptBuilder:
         light = scene.get("lighting", "Atmospheric cinematic lighting, gentle rim light, soft bokeh")
 
         char_desc = self.character_dna.get("description", "A heroic explorer character.")
-        
+
         dialogue_text = ""
         if include_dialogue and scene.get("dialogue"):
             dialogue_data = scene["dialogue"]
@@ -70,21 +80,52 @@ class GenericPromptBuilder:
     def create_class(cls, config: Dict[str, Any]):
         """Crea una clase adaptadora compatible con la interfaz estática esperada por el pipeline."""
         instance = cls(config)
-        
+
         class DynamicPromptBuilderAdapter:
             @staticmethod
             def build_scene_by_id(scene_id: str, scenes: Optional[list] = None) -> Optional[str]:
                 return instance.build_scene_by_id(scene_id, scenes=scenes)
-            
+
             @staticmethod
             def build_video_prompt(scene: Dict[str, Any], include_dialogue: bool = True) -> str:
                 return instance.build_video_prompt(scene, include_dialogue=include_dialogue)
-                
+
         return DynamicPromptBuilderAdapter
 
 
 class GenericStoryGenerator:
-    """Generador dinámico de historias que adapta la plantilla del arquetipo JSON."""
+    """Generador dinámico universal de historias compatible con múltiples proveedores de IA."""
+
+    MODEL_ALIASES = {
+        # Opencode Go
+        "haiku": "claude-haiku-5-5",
+        "claude": "claude-haiku-5-5",
+        "claude-haiku": "claude-haiku-5-5",
+        "deepseek": "deepseek-v4-pro",
+        "deepseek-pro": "deepseek-v4-pro",
+        "kimi": "kimi-k2.7-code",
+        "kimi-code": "kimi-k2.7-code",
+        "kimi-pro": "kimi-k3.1-pro",
+        "minimax": "minimax-m3.1-flash",
+        "qwen": "qwen-3.7-plus",
+        # OpenAI
+        "gpt-4o": "gpt-4o",
+        "gpt-4o-mini": "gpt-4o-mini",
+        "4o-mini": "gpt-4o-mini",
+        "4o": "gpt-4o",
+        "o3-mini": "o3-mini",
+        # Anthropic Oficial
+        "sonnet": "claude-3-5-sonnet-20241022",
+        "claude-sonnet": "claude-3-5-sonnet-20241022",
+        "claude-3.5-sonnet": "claude-3-5-sonnet-20241022",
+        "claude-3.5-haiku": "claude-3-5-haiku-20241022",
+        # Gemini Oficial
+        "gemini": "gemini-2.5-flash",
+        "gemini-flash": "gemini-2.5-flash",
+        "gemini-pro": "gemini-1.5-pro",
+        "gemini-2.5": "gemini-2.5-flash",
+        "gemini-2.0": "gemini-2.0-flash",
+    }
 
     def __init__(self, config: Dict[str, Any]):
         self.config = config
@@ -93,13 +134,73 @@ class GenericStoryGenerator:
         self.character_dna = config.get("character_dna", {})
         self.world_rules = config.get("world_rules", {})
 
-    @staticmethod
-    def get_opencode_key() -> Optional[str]:
-        return os.getenv("OPENCODE_API_KEY")
+    @classmethod
+    def resolve_model_name(cls, m: Optional[str] = None, provider: str = "opencode") -> str:
+        """Resuelve el nombre exacto del modelo según el alias y el proveedor."""
+        if m and m.strip():
+            clean = m.strip().lower()
+            return cls.MODEL_ALIASES.get(clean, m.strip())
+
+        # Si no se pasó modelo, tomar el predeterminado del proveedor
+        if provider == "gemini":
+            return os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+        elif provider == "openai":
+            return os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
+        elif provider == "anthropic":
+            return os.getenv("ANTHROPIC_MODEL", "claude-3-5-haiku-20241022").strip()
+        else:
+            return os.getenv("OPENCODE_MODEL", "claude-haiku-5-5").strip()
+
+    @classmethod
+    def resolve_provider(cls, provider_arg: Optional[str] = None, model_arg: Optional[str] = None) -> str:
+        """Determina de forma inteligente qué proveedor usar (CLI > Modelo > .env > Auto-detección de Keys)."""
+        # 1. Argumento explícito en CLI (-p / --provider)
+        if provider_arg and provider_arg.strip():
+            p = provider_arg.strip().lower()
+            if p in ["gemini", "google"]:
+                return "gemini"
+            if p in ["openai", "gpt"]:
+                return "openai"
+            if p in ["anthropic", "claude"]:
+                return "anthropic"
+            if p in ["opencode", "zen"]:
+                return "opencode"
+            return p
+
+        # 2. Detección por el nombre del modelo (-m)
+        if model_arg and model_arg.strip():
+            m = model_arg.strip().lower()
+            if "gemini" in m:
+                return "gemini"
+            if any(k in m for k in ["gpt-", "o1", "o3", "4o"]):
+                return "openai"
+            if any(k in m for k in ["sonnet", "claude-3-5"]):
+                return "anthropic"
+            if any(k in m for k in ["kimi", "deepseek", "minimax", "qwen", "haiku-5"]):
+                return "opencode"
+
+        # 3. Variable de entorno AI_PROVIDER
+        env_prov = os.getenv("AI_PROVIDER", "").strip().lower()
+        if env_prov in ["gemini", "openai", "anthropic", "opencode"]:
+            return env_prov
+
+        # 4. Auto-detección por claves presentes en .env
+        if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
+            # Si solo está configurado Gemini, usar Gemini por defecto
+            if not os.getenv("OPENCODE_API_KEY"):
+                return "gemini"
+        if os.getenv("OPENAI_API_KEY") and not os.getenv("OPENCODE_API_KEY") and not os.getenv("GEMINI_API_KEY"):
+            return "openai"
+        if os.getenv("ANTHROPIC_API_KEY") and not os.getenv("OPENCODE_API_KEY"):
+            return "anthropic"
+        if os.getenv("OPENCODE_API_KEY"):
+            return "opencode"
+
+        return "gemini" if (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")) else "opencode"
 
     def build_prompt(self, location: Optional[str] = None, free_theme: Optional[str] = None) -> str:
         loc = f"📍 ENTORNO: {location}" if location else f"📍 ENTORNO: {self.world_rules.get('setting', 'Un escenario cinematográfico acorde al universo.')}"
-        
+
         char_name = self.character_dna.get("name", "Protagonista")
         char_desc = self.character_dna.get("description", "Personaje principal")
         char_acting = self.character_dna.get("acting", "Valiente, ágil y carismático.")
@@ -108,35 +209,36 @@ class GenericStoryGenerator:
         theme_txt = f"\n🎯 TEMA SUGERIDO POR EL USUARIO: {free_theme}\n" if free_theme else ""
 
         return f"""Eres un Director Creativo cinematográfico de élite especializado en contenido hiperviral de TikTok.
-Tu público objetivo es 100% HISPANOHABLANTE. Todos los diálogos, títulos y textos DEBEN SER ESTRICTAMENTE EN ESPAÑOL.
+Tu misión es diseñar un guion cautivador y tenso de 30 segundos (3 tomas de 10s cada una) para el protagonista de este universo.
 
-UNIVERSO Y PERSONAJE:
-- Universo: {self.display_name}
-- Protagonista: {char_name}. {char_desc}
-- Cómo actúa: {char_acting}
-- Tono y ritmo: {tone}
 {loc}
 {theme_txt}
-ESTRUCTURA DE TIKTOK EN 3 TOMAS (30 SEGUNDOS TOTAL, CONTINUIDAD DIRECTA):
-1. TOMA 1: HOOK TREPIDANTE (< 3s) - Alta energía visual, acción inmediata "in media res" y frase gancho en español (< 3s).
-2. TOMA 2: MANIOBRA Y SUSPENSO (10-20s) - Superación de obstáculo con ingenio y trabajo en equipo.
-3. TOMA 3: RESOLUCIÓN Y ESCAPE (20-30s) - Clímax triunfal y remate memorable.
 
-REGLAS DE SEGURIDAD (ANTI-FILTROS):
-- NUNCA uses términos violentos explícitos, armas reales, ni hagas mención a menores o camas.
+FICHA DEL PROTAGONISTA:
+- Nombre: {char_name}
+- Descripción física y vestuario: {char_desc}
+- Biomecánica y actitud: {char_acting}
+- Tono del universo: {tone}
 
-Devuelve ÚNICAMENTE un bloque de código JSON con este formato exacto:
+ESTRUCTURA OBLIGATORIA (3 TOMAS NARRATIVAS DE 10s):
+- Toma 1: Planteamiento y gancho inicial (primeros 3 segundos vitales de retención).
+- Toma 2: Punto de giro, obstáculo o momento de máximo riesgo a contrarreloj.
+- Toma 3: Clímax, resolución exitosa o escape triunfal.
+
+REGLAS ESTRICTAS DE CONTENIDO:
+1. Todas las descripciones visuales deben ser hiperrealistas y cinematográficas.
+2. Los diálogos deben ser en ESPAÑOL, directos, naturales, con urgencia y compinchería.
+3. Responde ÚNICAMENTE con un objeto JSON válido con la siguiente estructura exacta (sin texto previo ni posterior):
+
 ```json
 {{
-  "location": "Locación de la historia",
-  "title": "Título llamativo en español",
-  "tiktok_caption": "Texto para el copy de TikTok con gancho",
-  "tiktok_hashtags": ["#Tag1", "#Tag2", "#Tag3"],
+  "title": "Título corto y épico del episodio",
+  "location": "Nombre específico del lugar",
   "scenes": [
     {{
       "id": "toma_1",
-      "title": "Toma 1: El Hook",
-      "description": "Acción inicial dinámica en español",
+      "title": "Toma 1: El Desafío",
+      "description": "Acción cinematográfica visual y clara del protagonista",
       "dialogue": [
         {{"speaker": "{char_name}", "voice": "Spanish (urgent)", "line": "¡Rápido, tenemos poco tiempo!"}}
       ],
@@ -167,75 +269,48 @@ Devuelve ÚNICAMENTE un bloque de código JSON con este formato exacto:
 }}
 ```"""
 
-    MODEL_ALIASES = {
-        "haiku": "claude-haiku-5-5",
-        "claude": "claude-haiku-5-5",
-        "claude-haiku": "claude-haiku-5-5",
-        "deepseek": "deepseek-v4-pro",
-        "deepseek-pro": "deepseek-v4-pro",
-        "kimi": "kimi-k2.7-code",
-        "kimi-code": "kimi-k2.7-code",
-        "kimi-pro": "kimi-k3.1-pro",
-        "minimax": "minimax-m3.1-flash",
-        "qwen": "qwen-3.7-plus",
-        "gpt": "gpt-6-luna",
-    }
+    def _parse_json_response(self, raw_content: str) -> Dict[str, Any]:
+        """Limpia bloques de código markdown y convierte a dict."""
+        match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw_content)
+        json_str = match.group(1).strip() if match else raw_content.strip()
+        return json.loads(json_str)
 
-    @classmethod
-    def resolve_model_name(cls, m: Optional[str] = None) -> str:
-        if m and m.strip():
-            clean = m.strip().lower()
-            return cls.MODEL_ALIASES.get(clean, m.strip())
-        return os.getenv("OPENCODE_MODEL", "claude-haiku-5-5").strip()
-
-    @staticmethod
-    def get_api_key() -> Optional[str]:
-        return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-
-    def generate_episode_with_gemini(self, location: Optional[str] = None, free_theme: Optional[str] = None) -> Dict[str, Any]:
-        """Respaldo oficial con Google Gemini API si Opencode no está disponible."""
-        gemini_key = self.get_api_key()
+    # ========================================================
+    # 1. LLAMADA A GOOGLE GEMINI OFICIAL (SDK google-genai)
+    # ========================================================
+    def _call_gemini(self, prompt: str, model_name: str) -> Dict[str, Any]:
+        gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not gemini_key:
-            raise RuntimeError("GEMINI_API_KEY no configurada.")
+            raise RuntimeError("GEMINI_API_KEY no configurada en .env.")
         from google import genai
         from google.genai import types
 
         client = genai.Client(api_key=gemini_key)
-        prompt = self.build_prompt(location=location, free_theme=free_theme)
-        model_to_use = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
-
-        logger.info(f"✨ Generando guion para [{self.display_name}] usando Google Gemini API ({model_to_use})...")
+        logger.info(f"✨ Generando guion con Google Gemini Oficial ({model_name})...")
         response = client.models.generate_content(
-            model=model_to_use,
+            model=model_name,
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 temperature=0.8,
             )
         )
-        raw_text = response.text.strip()
-        cleaned = re.sub(r"^```json\s*", "", raw_text, flags=re.IGNORECASE)
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-        return json.loads(cleaned)
+        return self._parse_json_response(response.text)
 
-    def generate_episode(self, location: Optional[str] = None, model: Optional[str] = None, free_theme: Optional[str] = None) -> Dict[str, Any]:
-        api_key = self.get_opencode_key()
+    # ========================================================
+    # 2. LLAMADA A OPENCODE GO (Endpoint OpenAI-compatible)
+    # ========================================================
+    def _call_opencode(self, prompt: str, model_name: str) -> Dict[str, Any]:
+        api_key = os.getenv("OPENCODE_API_KEY")
         if not api_key:
-            if self.get_api_key():
-                logger.warning("OPENCODE_API_KEY no detectada. Usando Gemini API de respaldo...")
-                return self.generate_episode_with_gemini(location=location, free_theme=free_theme)
-            raise RuntimeError("Se requiere OPENCODE_API_KEY o GEMINI_API_KEY en .env para generar guiones.")
-
-        resolved_model = self.resolve_model_name(model)
-        prompt = self.build_prompt(location=location, free_theme=free_theme)
-
-        logger.info(f"✨ Generando guion para [{self.display_name}] usando {resolved_model}...")
+            raise RuntimeError("OPENCODE_API_KEY no configurada en .env.")
 
         base_url = os.getenv("OPENCODE_BASE_URL", "https://opencode.ai/zen/go/v1")
         url = f"{base_url.rstrip('/')}/chat/completions"
 
+        logger.info(f"✨ Generando guion con Opencode Go ({model_name})...")
         payload = {
-            "model": resolved_model,
+            "model": model_name,
             "messages": [
                 {"role": "system", "content": "Eres un guionista cinematográfico de TikTok. Responde ÚNICAMENTE con JSON válido."},
                 {"role": "user", "content": prompt}
@@ -243,7 +318,6 @@ Devuelve ÚNICAMENTE un bloque de código JSON con este formato exacto:
             "temperature": 0.75,
             "max_tokens": 1800,
         }
-
         req = urllib.request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
@@ -254,16 +328,110 @@ Devuelve ÚNICAMENTE un bloque de código JSON con este formato exacto:
             },
             method="POST",
         )
-
         with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read().decode("utf-8"))
+        return self._parse_json_response(data["choices"][0]["message"]["content"])
 
-        raw_content = data["choices"][0]["message"]["content"]
-        match = re.search(r"```json\s*(.*?)\s*```", raw_content, re.DOTALL)
-        json_str = match.group(1) if match else raw_content.strip()
+    # ========================================================
+    # 3. LLAMADA A OPENAI OFICIAL (Endpoint OpenAI v1)
+    # ========================================================
+    def _call_openai(self, prompt: str, model_name: str) -> Dict[str, Any]:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY no configurada en .env.")
 
-        parsed = json.loads(json_str)
-        return parsed
+        url = "https://api.openai.com/v1/chat/completions"
+        logger.info(f"✨ Generando guion con OpenAI Oficial ({model_name})...")
+        payload = {
+            "model": model_name,
+            "messages": [
+                {"role": "system", "content": "Eres un guionista cinematográfico de TikTok. Responde ÚNICAMENTE con JSON válido."},
+                {"role": "user", "content": prompt}
+            ],
+            "response_format": {"type": "json_object"},
+            "temperature": 0.75,
+        }
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+                "User-Agent": "FlowVideoAutomation/2.0",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return self._parse_json_response(data["choices"][0]["message"]["content"])
+
+    # ========================================================
+    # 4. LLAMADA A ANTHROPIC CLAUDE OFICIAL (Endpoint Messages v1)
+    # ========================================================
+    def _call_anthropic(self, prompt: str, model_name: str) -> Dict[str, Any]:
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY no configurada en .env.")
+
+        url = "https://api.anthropic.com/v1/messages"
+        logger.info(f"✨ Generando guion con Anthropic Claude Oficial ({model_name})...")
+        payload = {
+            "model": model_name,
+            "max_tokens": 1800,
+            "system": "Eres un guionista cinematográfico de TikTok. Responde ÚNICAMENTE con JSON válido sin bloques markdown ni texto adicional.",
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+        }
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "User-Agent": "FlowVideoAutomation/2.0",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return self._parse_json_response(data["content"][0]["text"])
+
+    # ========================================================
+    # DISPATCHER PRINCIPAL CON FALLBACK INTELIGENTE
+    # ========================================================
+    def generate_episode(
+        self,
+        location: Optional[str] = None,
+        model: Optional[str] = None,
+        free_theme: Optional[str] = None,
+        provider: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Genera el episodio despachando la petición al proveedor elegido."""
+        active_provider = self.resolve_provider(provider_arg=provider, model_arg=model)
+        resolved_model = self.resolve_model_name(model, provider=active_provider)
+        prompt = self.build_prompt(location=location, free_theme=free_theme)
+
+        logger.info(f"🎯 Proveedor activo: {active_provider.upper()} | Modelo: {resolved_model}")
+
+        try:
+            if active_provider == "gemini":
+                return self._call_gemini(prompt, resolved_model)
+            elif active_provider == "openai":
+                return self._call_openai(prompt, resolved_model)
+            elif active_provider == "anthropic":
+                return self._call_anthropic(prompt, resolved_model)
+            else:
+                return self._call_opencode(prompt, resolved_model)
+        except Exception as e:
+            # Fallback automático a Gemini si Opencode/OpenAI/Anthropic fallan y Gemini está disponible
+            gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+            if active_provider != "gemini" and gemini_key:
+                logger.warning(f"Aviso del proveedor {active_provider.upper()} ({e}). Reintentando automáticamente con Google Gemini API...")
+                gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+                return self._call_gemini(prompt, gemini_model)
+            raise e
 
     @classmethod
     def create_class(cls, config: Dict[str, Any]):
@@ -272,19 +440,25 @@ Devuelve ÚNICAMENTE un bloque de código JSON con este formato exacto:
 
         class DynamicStoryGeneratorAdapter:
             @staticmethod
-            def resolve_model_name(m: Optional[str] = None) -> str:
-                return instance.resolve_model_name(m)
+            def resolve_model_name(m: Optional[str] = None, provider: str = "opencode") -> str:
+                return instance.resolve_model_name(m, provider=provider)
 
             @staticmethod
-            def generate_episode(location: Optional[str] = None, model: Optional[str] = None, free_theme: Optional[str] = None) -> Dict[str, Any]:
-                return instance.generate_episode(location=location, model=model, free_theme=free_theme)
+            def resolve_provider(provider_arg: Optional[str] = None, model_arg: Optional[str] = None) -> str:
+                return instance.resolve_provider(provider_arg=provider_arg, model_arg=model_arg)
 
             @staticmethod
-            def generate_episode_with_gemini(location: Optional[str] = None, free_theme: Optional[str] = None) -> Dict[str, Any]:
-                return instance.generate_episode_with_gemini(location=location, free_theme=free_theme)
-
-            @staticmethod
-            def get_api_key() -> Optional[str]:
-                return instance.get_api_key()
+            def generate_episode(
+                location: Optional[str] = None,
+                model: Optional[str] = None,
+                free_theme: Optional[str] = None,
+                provider: Optional[str] = None
+            ) -> Dict[str, Any]:
+                return instance.generate_episode(
+                    location=location,
+                    model=model,
+                    free_theme=free_theme,
+                    provider=provider
+                )
 
         return DynamicStoryGeneratorAdapter
