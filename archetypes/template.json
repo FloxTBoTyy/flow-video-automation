@@ -1,0 +1,18 @@
+{
+  "key": "aventurero",
+  "display_name": "El Aventurero del Espacio",
+  "character_name": "aventurero 1",
+  "video_prefix": "aventura",
+  "character_dna": {
+    "name": "Alex",
+    "description": "Un audaz explorador espacial con traje de expedición retro-futurista de cuero marrón y bronce, casco con visor dorado y botas todoterreno.",
+    "acting": "Valiente, ágil, altamente observador. Camina con paso firme y utiliza un escáner holográfico manual para analizar artefactos y terreno desconocido."
+  },
+  "world_rules": {
+    "setting": "Ruinas alienígenas olvidadas, selvas bioluminiscentes y templos de cristal en planetas remotos.",
+    "tone": "Misión a contrarreloj de 30 segundos, alta adrenalina, suspenso de descubrimiento y misterio de ciencia ficción."
+  },
+  "visual_style": "Estilo cinematográfico fotorrealista de acción real, lente de 35 mm f/1.8, iluminación atmosférica suave, bokeh cremoso y enfoque ultra nítido.",
+  "tiktok_default_caption": "¡Misión de exploración en las ruinas alienígenas olvidadas! 🚀🪐✨",
+  "tiktok_default_hashtags": ["#SciFi", "#Aventura", "#Espacio", "#Exploracion", "#Cine", "#Misterio"]
+}

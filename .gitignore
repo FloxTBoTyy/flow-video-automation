@@ -1,0 +1,96 @@
+# ========================================================
+# ARCHIVOS PRIVADOS Y PROPIEDAD INTELECTUAL DEL USUARIO
+# NUNCA SE SUBEN A GITHUB (Permanecen solo en tu máquina local)
+# ========================================================
+private_archetypes/
+prompt_builder.py
+gemini_story_generator.py
+arrietty_prompt_builder.py
+arrietty_story_generator.py
+story_engine.py
+prompt_validator.py
+run_automation.py
+CONTEXT.md
+sugar_cube_episode.json
+last_episode_*.json
+episode_history.json
+episode_history.py
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C environments
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Environment variables & secrets (CRITICAL)
+.env
+.env.local
+.env.*.local
+*.env
+
+# Video & Media output (Keep output directory empty via .gitkeep)
+output_videos/*
+!output_videos/.gitkeep
+downloads/*
+!downloads/.gitkeep
+*.mp4
+*.webm
+*.mov
+*.avi
+*.mkv
+*.png
+*.jpg
+*.jpeg
+
+# IDE & Editor settings
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.directory
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Playwright & Browser automation artifacts
+playwright-report/
+test-results/
+.playwright/
+
+# Agent & AI tool runtime logs
+.agents/

@@ -1,0 +1,18 @@
+{
+  "key": "cyberpunk",
+  "display_name": "Kael: Detective Neo-Tokio",
+  "character_name": "detective 1",
+  "video_prefix": "cyberpunk",
+  "character_dna": {
+    "name": "Kael",
+    "description": "A sharp 30-year-old street detective wearing a weathered high-collar trench coat with subtle neon cyan LED trim, dark tactical boots, and cybernetic optical monocle reflecting holographic billboards.",
+    "acting": "Cool, calculated, stealthy, and quick on his feet. Sprints across rain-slicked neon alleys, slides beneath laser security fences, and decodes encrypted memory chips under streetlamps."
+  },
+  "world_rules": {
+    "setting": "Callejones lluviosos de una metrópolis cyberpunk del año 2099, rascacielos con hologramas gigantes y mercados subterráneos de tecnología.",
+    "tone": "Micro-thriller neo-noir a contrarreloj de 30 segundos, tensión de sigilo, reflejos de neón y escape vertiginoso."
+  },
+  "visual_style": "Blade Runner inspired cinematic live-action, 50mm f/1.4 lens, wet asphalt reflections, neon magenta and cyan rim lighting, atmospheric steam and rain bokeh.",
+  "tiktok_default_caption": "¡Misión de extracción en los callejones prohibidos de Neo-Tokio! 🌧️🌆⚡",
+  "tiktok_default_hashtags": ["#Cyberpunk", "#NeoNoir", "#Cine", "#SciFi", "#Futuro", "#Misterio"]
+}

@@ -1,0 +1,18 @@
+{
+  "key": "explorer",
+  "display_name": "Alex: El Explorador Cósmico",
+  "character_name": "explorer 1",
+  "video_prefix": "explorer",
+  "character_dna": {
+    "name": "Alex",
+    "description": "A 28-year-old intrepid space explorer wearing a retro-futuristic bronze and leather expedition suit with a glowing holographic compass on his wrist and magnetic adventure boots.",
+    "acting": "Confident, athletic, and resourceful. Moves with deliberate tactical speed, scanning alien structures, deciphering holographic glyphs, and vaulting across obstacles."
+  },
+  "world_rules": {
+    "setting": "Ruinas alienígenas bioluminiscentes, templos de cristal bajo auroras boreales cósmicas y cañones de arena dorada en exoplanetas.",
+    "tone": "Misión trepidante de 30 segundos, suspenso de exploración sci-fi a contrarreloj y alta adrenalina cinematográfica."
+  },
+  "visual_style": "High-end cinematic sci-fi live-action, 35mm anamorphic lens, atmospheric mist, volumetric golden rim light, creamy bokeh, ultra-detailed textures.",
+  "tiktok_default_caption": "¡Misión de exploración en las ruinas alienígenas olvidadas! 🚀🪐✨",
+  "tiktok_default_hashtags": ["#SciFi", "#Espacio", "#Aventura", "#Cine", "#Misterio", "#Exploracion"]
+}
