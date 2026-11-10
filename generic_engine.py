@@ -97,23 +97,30 @@ class GenericStoryGenerator:
     """Generador dinámico universal de historias compatible con múltiples proveedores de IA."""
 
     MODEL_ALIASES = {
-        # Google Gemini Oficial
+        # Google Gemini (Baseline y Frontier)
         "gemini": "gemini-2.5-flash",
         "gemini-flash": "gemini-2.5-flash",
         "gemini-pro": "gemini-1.5-pro",
         "gemini-2.5": "gemini-2.5-flash",
         "gemini-2.0": "gemini-2.0-flash",
         "gemini-1.5": "gemini-1.5-flash",
+        "argon": "gemini-argon",
+        "gemini-argon": "gemini-argon",
 
-        # OpenAI Oficial
+        # OpenAI (Baseline y Frontier: Astra, Sol, Luna)
         "gpt-4o": "gpt-4o",
         "gpt-4o-mini": "gpt-4o-mini",
         "4o-mini": "gpt-4o-mini",
         "4o": "gpt-4o",
         "o3-mini": "o3-mini",
         "o1-mini": "o1-mini",
+        "astra": "gpt-5-astra",
+        "sol": "gpt-5-sol",
+        "luna": "gpt-6-luna",
+        "gpt-5": "gpt-5-sol",
+        "gpt-6": "gpt-6-luna",
 
-        # Anthropic Claude Oficial
+        # Anthropic Claude (Baseline y Frontier: Fable)
         "haiku": "claude-3-5-haiku-20241022",
         "claude": "claude-3-5-haiku-20241022",
         "claude-haiku": "claude-3-5-haiku-20241022",
@@ -121,27 +128,33 @@ class GenericStoryGenerator:
         "claude-sonnet": "claude-3-5-sonnet-20241022",
         "claude-3.5-sonnet": "claude-3-5-sonnet-20241022",
         "claude-3.5-haiku": "claude-3-5-haiku-20241022",
+        "fable": "claude-fable",
+        "claude-fable": "claude-fable",
+        "claude-haiku-5-5": "claude-haiku-5-5",
 
-        # DeepSeek Oficial
+        # DeepSeek
         "deepseek": "deepseek-chat",
         "deepseek-chat": "deepseek-chat",
         "deepseek-v3": "deepseek-chat",
         "deepseek-r1": "deepseek-reasoner",
         "r1": "deepseek-reasoner",
+        "deepseek-v4-pro": "deepseek-v4-pro",
 
-        # Moonshot Kimi Oficial
+        # Moonshot Kimi (v1 y K2/K3 series)
         "kimi": "moonshot-v1-8k",
         "moonshot": "moonshot-v1-8k",
         "kimi-32k": "moonshot-v1-32k",
+        "kimi-k3": "kimi-k3.1-pro",
+        "kimi-k3.1": "kimi-k3.1-pro",
+        "kimi-k2.7": "kimi-k2.7-code",
+        "kimi-k2.7-code": "kimi-k2.7-code",
 
-        # Alibaba Qwen
+        # Alibaba Qwen (v2.5, v3.7, v4)
         "qwen": "qwen-2.5-72b-instruct",
         "qwen-2.5": "qwen-2.5-72b-instruct",
-
-        # Retrocompatibilidad con nombres de rutas de proxies internos
-        "claude-haiku-5-5": "claude-haiku-5-5",
-        "deepseek-v4-pro": "deepseek-v4-pro",
-        "kimi-k2.7-code": "kimi-k2.7-code",
+        "qwen-3.7": "qwen-3.7-plus",
+        "qwen-4": "qwen-4-plus",
+        "qwen4": "qwen-4-plus",
     }
 
     def __init__(self, config: Dict[str, Any]):
@@ -187,11 +200,11 @@ class GenericStoryGenerator:
         # 2. Detección por el nombre del modelo (-m)
         if model_arg and model_arg.strip():
             m = model_arg.strip().lower()
-            if "gemini" in m:
+            if any(k in m for k in ["gemini", "argon"]):
                 return "gemini"
-            if any(k in m for k in ["gpt-", "o1", "o3", "4o"]):
+            if any(k in m for k in ["gpt-", "o1", "o3", "4o", "astra", "sol", "luna"]):
                 return "openai"
-            if any(k in m for k in ["sonnet", "claude-3-5"]):
+            if any(k in m for k in ["claude", "sonnet", "haiku", "fable"]):
                 return "anthropic"
             if any(k in m for k in ["kimi", "deepseek", "moonshot", "qwen", "minimax"]):
                 return "opencode"

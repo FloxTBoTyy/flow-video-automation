@@ -227,44 +227,53 @@ Si estás creando contenido para una marca, canal o propiedad intelectual privad
 
 ## 🧠 Proveedores y Modelos de IA Soportados
 
-El sistema cuenta con un motor multi-proveedor universal. Puedes elegir qué IA generará los guiones mediante la variable `AI_PROVIDER` en tu `.env` o mediante el parámetro `-p / --provider` en la línea de comandos.
+El sistema cuenta con un **motor universal y 100% agnóstico de modelo**. Puedes elegir qué IA generará los guiones mediante la variable `AI_PROVIDER` en tu `.env` o con el flag `-p / --provider` en la CLI.
 
-### 🔌 Proveedores Integrados:
+> ⚡ **Arquitectura Agnóstica y Pass-Through Directo:** No estás restringido a nombres preconfigurados. Puedes pasar **cualquier identificador de modelo** (actual o futuro) soportado por tu API key directamente con el parámetro `-m <nombre-modelo>`. El motor lo reenviará directamente al proveedor correspondiente.
+
+### 🔌 Proveedores Integrados y Modelos Soportados:
 
 1. **Google Gemini Oficial** (`-p gemini` o `AI_PROVIDER=gemini`):
-   - Integración nativa con Google AI Studio mediante el SDK `google-genai`.
-   - **Modelos:** `gemini-2.5-flash` (por defecto), `gemini-2.0-flash`, `gemini-1.5-pro`.
-   - Ideal para creadores que buscan rapidez, excelente creatividad y plan gratuito en AI Studio.
+   - Conexión nativa con Google AI Studio mediante el SDK `google-genai`.
+   - **Modelos Frontier:** `gemini-argon` (alias `-m argon`).
+   - **Modelos de Producción:** `gemini-2.5-flash` (por defecto, rápido y creativo), `gemini-2.0-flash`, `gemini-1.5-pro`.
 
 2. **OpenAI Oficial** (`-p openai` o `AI_PROVIDER=openai`):
    - Conexión directa con la API oficial de OpenAI (`OPENAI_API_KEY`).
-   - **Modelos:** `gpt-4o-mini` (por defecto, rápido y económico), `gpt-4o` (máxima calidad cinematográfica), `o3-mini`.
+   - **Modelos Frontier & Next-Gen:** `gpt-5-sol` (`-m sol`), `gpt-5-astra` (`-m astra`), `gpt-6-luna` (`-m luna`).
+   - **Modelos de Producción:** `gpt-4o-mini` (por defecto, eficiente), `gpt-4o` (máxima fidelidad cinematográfica), `o3-mini`, `o1-mini`.
 
 3. **Anthropic Claude Oficial** (`-p anthropic` o `AI_PROVIDER=anthropic`):
    - Conexión directa con la API oficial de Anthropic (`ANTHROPIC_API_KEY`).
-   - **Modelos:** `claude-3-5-haiku-20241022` (por defecto, guiones dinámicos), `claude-3-5-sonnet-20241022`.
+   - **Modelos Frontier:** `claude-fable` (alias `-m fable`).
+   - **Modelos de Producción:** `claude-3-5-haiku-20241022` (por defecto, ritmo y diálogos rápidos), `claude-3-5-sonnet-20241022`.
 
 4. **Opencode Go / Pasarelas OpenAI-compatibles** (`-p opencode` o `AI_PROVIDER=opencode`):
    - Pasarela multimodelo de alta velocidad (`OPENCODE_BASE_URL`).
-   - **Modelos disponibles:**
-     - `-m deepseek`: DeepSeek V3 (`deepseek-chat`) o DeepSeek R1 (`deepseek-reasoner`).
-     - `-m kimi`: Moonshot Kimi (`moonshot-v1-8k`, `moonshot-v1-32k`).
-     - `-m qwen`: Alibaba Qwen 2.5 (`qwen-2.5-72b-instruct`).
+   - **Alibaba Qwen:** `qwen-4-plus` (`-m qwen-4` o `-m qwen4`), `qwen-3.7-plus`, `qwen-2.5-72b-instruct`.
+   - **Moonshot Kimi:** `kimi-k3.1-pro` (`-m kimi-k3`), `kimi-k2.7-code`, `moonshot-v1-8k`, `moonshot-v1-32k`.
+   - **DeepSeek:** `deepseek-v4-pro`, `deepseek-chat` (V3), `deepseek-reasoner` (R1).
 
 ### 💡 Ejemplos de Uso:
 
 ```bash
-# Usar Google Gemini como proveedor:
-python generate_and_assemble_episode.py random -a explorer -p gemini
+# Usar Google Gemini con el modelo Frontier Argon:
+python generate_and_assemble_episode.py random -a explorer -p gemini -m argon
 
-# Usar OpenAI con GPT-4o Mini:
-python generate_and_assemble_episode.py random -a explorer -p openai -m gpt-4o-mini
+# Usar OpenAI con GPT-5 Sol:
+python generate_and_assemble_episode.py random -a explorer -p openai -m sol
 
-# Usar Opencode con Kimi:
-python generate_and_assemble_episode.py random -a explorer -p opencode -m kimi
+# Usar Anthropic Claude con Claude Fable:
+python generate_and_assemble_episode.py random -a explorer -p anthropic -m fable
 
-# Usar Anthropic Claude Oficial:
-python generate_and_assemble_episode.py random -a explorer -p anthropic -m sonnet
+# Usar Alibaba Qwen 4+ en Opencode:
+python generate_and_assemble_episode.py random -a explorer -p opencode -m qwen-4
+
+# Usar Moonshot Kimi K3 en Opencode:
+python generate_and_assemble_episode.py random -a explorer -p opencode -m kimi-k3
+
+# Pasar cualquier identificador de modelo personalizado o experimental:
+python generate_and_assemble_episode.py random -a explorer -p gemini -m gemini-2.5-flash-preview-05-20
 ```
 
 ---
