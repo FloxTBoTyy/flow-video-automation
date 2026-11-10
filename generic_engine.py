@@ -97,34 +97,51 @@ class GenericStoryGenerator:
     """Generador dinámico universal de historias compatible con múltiples proveedores de IA."""
 
     MODEL_ALIASES = {
-        # Opencode Go
-        "haiku": "claude-haiku-5-5",
-        "claude": "claude-haiku-5-5",
-        "claude-haiku": "claude-haiku-5-5",
-        "deepseek": "deepseek-v4-pro",
-        "deepseek-pro": "deepseek-v4-pro",
-        "kimi": "kimi-k2.7-code",
-        "kimi-code": "kimi-k2.7-code",
-        "kimi-pro": "kimi-k3.1-pro",
-        "minimax": "minimax-m3.1-flash",
-        "qwen": "qwen-3.7-plus",
-        # OpenAI
-        "gpt-4o": "gpt-4o",
-        "gpt-4o-mini": "gpt-4o-mini",
-        "4o-mini": "gpt-4o-mini",
-        "4o": "gpt-4o",
-        "o3-mini": "o3-mini",
-        # Anthropic Oficial
-        "sonnet": "claude-3-5-sonnet-20241022",
-        "claude-sonnet": "claude-3-5-sonnet-20241022",
-        "claude-3.5-sonnet": "claude-3-5-sonnet-20241022",
-        "claude-3.5-haiku": "claude-3-5-haiku-20241022",
-        # Gemini Oficial
+        # Google Gemini Oficial
         "gemini": "gemini-2.5-flash",
         "gemini-flash": "gemini-2.5-flash",
         "gemini-pro": "gemini-1.5-pro",
         "gemini-2.5": "gemini-2.5-flash",
         "gemini-2.0": "gemini-2.0-flash",
+        "gemini-1.5": "gemini-1.5-flash",
+
+        # OpenAI Oficial
+        "gpt-4o": "gpt-4o",
+        "gpt-4o-mini": "gpt-4o-mini",
+        "4o-mini": "gpt-4o-mini",
+        "4o": "gpt-4o",
+        "o3-mini": "o3-mini",
+        "o1-mini": "o1-mini",
+
+        # Anthropic Claude Oficial
+        "haiku": "claude-3-5-haiku-20241022",
+        "claude": "claude-3-5-haiku-20241022",
+        "claude-haiku": "claude-3-5-haiku-20241022",
+        "sonnet": "claude-3-5-sonnet-20241022",
+        "claude-sonnet": "claude-3-5-sonnet-20241022",
+        "claude-3.5-sonnet": "claude-3-5-sonnet-20241022",
+        "claude-3.5-haiku": "claude-3-5-haiku-20241022",
+
+        # DeepSeek Oficial
+        "deepseek": "deepseek-chat",
+        "deepseek-chat": "deepseek-chat",
+        "deepseek-v3": "deepseek-chat",
+        "deepseek-r1": "deepseek-reasoner",
+        "r1": "deepseek-reasoner",
+
+        # Moonshot Kimi Oficial
+        "kimi": "moonshot-v1-8k",
+        "moonshot": "moonshot-v1-8k",
+        "kimi-32k": "moonshot-v1-32k",
+
+        # Alibaba Qwen
+        "qwen": "qwen-2.5-72b-instruct",
+        "qwen-2.5": "qwen-2.5-72b-instruct",
+
+        # Retrocompatibilidad con nombres de rutas de proxies internos
+        "claude-haiku-5-5": "claude-haiku-5-5",
+        "deepseek-v4-pro": "deepseek-v4-pro",
+        "kimi-k2.7-code": "kimi-k2.7-code",
     }
 
     def __init__(self, config: Dict[str, Any]):
@@ -149,7 +166,7 @@ class GenericStoryGenerator:
         elif provider == "anthropic":
             return os.getenv("ANTHROPIC_MODEL", "claude-3-5-haiku-20241022").strip()
         else:
-            return os.getenv("OPENCODE_MODEL", "claude-haiku-5-5").strip()
+            return os.getenv("OPENCODE_MODEL", "deepseek-chat").strip()
 
     @classmethod
     def resolve_provider(cls, provider_arg: Optional[str] = None, model_arg: Optional[str] = None) -> str:
@@ -176,7 +193,7 @@ class GenericStoryGenerator:
                 return "openai"
             if any(k in m for k in ["sonnet", "claude-3-5"]):
                 return "anthropic"
-            if any(k in m for k in ["kimi", "deepseek", "minimax", "qwen", "haiku-5"]):
+            if any(k in m for k in ["kimi", "deepseek", "moonshot", "qwen", "minimax"]):
                 return "opencode"
 
         # 3. Variable de entorno AI_PROVIDER

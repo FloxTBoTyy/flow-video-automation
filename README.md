@@ -53,8 +53,8 @@ Permite a cualquier creador definir sus propios personajes, historias y universo
 
 ### 1. Clonar el repositorio
 ```bash
-git clone https://github.com/tu-usuario/cuy-flow-automation.git
-cd cuy-flow-automation
+git clone https://github.com/FloxTBoTyy/flow-video-automation.git
+cd flow-video-automation
 ```
 
 ### 2. Crear y activar el entorno virtual
@@ -236,22 +236,20 @@ El sistema cuenta con un motor multi-proveedor universal. Puedes elegir qué IA 
    - **Modelos:** `gemini-2.5-flash` (por defecto), `gemini-2.0-flash`, `gemini-1.5-pro`.
    - Ideal para creadores que buscan rapidez, excelente creatividad y plan gratuito en AI Studio.
 
-2. **Opencode Go** (`-p opencode` o `AI_PROVIDER=opencode`):
-   - Plataforma multimodelo de alta velocidad.
-   - **Modelos disponibles:**
-     - `-m kimi`: Moonshot Kimi (`kimi-k2.7-code`, `kimi-k3.1-pro`).
-     - `-m deepseek`: DeepSeek (`deepseek-v4-pro`).
-     - `-m haiku` o `-m claude`: Anthropic Claude (`claude-haiku-5-5`).
-     - `-m minimax`: MiniMax (`minimax-m3.1-flash`).
-     - `-m qwen`: Alibaba Qwen (`qwen-3.7-plus`).
-
-3. **OpenAI Oficial** (`-p openai` o `AI_PROVIDER=openai`):
+2. **OpenAI Oficial** (`-p openai` o `AI_PROVIDER=openai`):
    - Conexión directa con la API oficial de OpenAI (`OPENAI_API_KEY`).
-   - **Modelos:** `gpt-4o-mini` (por defecto), `gpt-4o`, `o3-mini`.
+   - **Modelos:** `gpt-4o-mini` (por defecto, rápido y económico), `gpt-4o` (máxima calidad cinematográfica), `o3-mini`.
 
-4. **Anthropic Claude Oficial** (`-p anthropic` o `AI_PROVIDER=anthropic`):
+3. **Anthropic Claude Oficial** (`-p anthropic` o `AI_PROVIDER=anthropic`):
    - Conexión directa con la API oficial de Anthropic (`ANTHROPIC_API_KEY`).
-   - **Modelos:** `claude-3-5-haiku-20241022` (por defecto), `claude-3-5-sonnet-20241022`.
+   - **Modelos:** `claude-3-5-haiku-20241022` (por defecto, guiones dinámicos), `claude-3-5-sonnet-20241022`.
+
+4. **Opencode Go / Pasarelas OpenAI-compatibles** (`-p opencode` o `AI_PROVIDER=opencode`):
+   - Pasarela multimodelo de alta velocidad (`OPENCODE_BASE_URL`).
+   - **Modelos disponibles:**
+     - `-m deepseek`: DeepSeek V3 (`deepseek-chat`) o DeepSeek R1 (`deepseek-reasoner`).
+     - `-m kimi`: Moonshot Kimi (`moonshot-v1-8k`, `moonshot-v1-32k`).
+     - `-m qwen`: Alibaba Qwen 2.5 (`qwen-2.5-72b-instruct`).
 
 ### 💡 Ejemplos de Uso:
 
