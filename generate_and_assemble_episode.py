@@ -591,20 +591,28 @@ async def run_full_pipeline(
     elif episode_file:
         ep_path = Path(episode_file)
         if not ep_path.exists():
-            logger.error(f"❌ El archivo de episodio '{episode_file}' no existe.")
-            await browser.close()
-            await p.stop()
-            return
+            alt_path = Path("private_archetypes") / Path(episode_file).name
+            if alt_path.exists():
+                ep_path = alt_path
+            else:
+                logger.error(f"❌ El archivo de episodio '{episode_file}' no existe.")
+                await browser.close()
+                await p.stop()
+                return
         with open(ep_path, "r", encoding="utf-8") as f:
             ep_data = json.load(f)
-        logger.info(f"📄 Episodio cargado desde archivo JSON: {episode_file}")
+        logger.info(f"📄 Episodio cargado desde archivo JSON: {ep_path}")
     elif resume_last:
         ep_path = Path(f"last_episode_{archetype_key}.json")
         if not ep_path.exists():
-            logger.error(f"❌ No se encontró archivo previo para reanudar ({ep_path}).")
-            await browser.close()
-            await p.stop()
-            return
+            alt_path = Path("private_archetypes") / f"last_episode_{archetype_key}.json"
+            if alt_path.exists():
+                ep_path = alt_path
+            else:
+                logger.error(f"❌ No se encontró archivo previo para reanudar ({ep_path}).")
+                await browser.close()
+                await p.stop()
+                return
         with open(ep_path, "r", encoding="utf-8") as f:
             ep_data = json.load(f)
         logger.info(f"🔄 Reanudando última historia guardada: '{ep_data.get('title')}'")
