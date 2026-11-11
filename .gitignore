@@ -2,6 +2,10 @@
 # ARCHIVOS PRIVADOS Y PROPIEDAD INTELECTUAL DEL USUARIO
 # NUNCA SE SUBEN A GITHUB (Permanecen solo en tu máquina local)
 # ========================================================
+archetypes/cuy.json
+archetypes/arrietty.json
+archetypes/*.private.json
+history_*.json
 private_archetypes/
 prompt_builder.py
 gemini_story_generator.py

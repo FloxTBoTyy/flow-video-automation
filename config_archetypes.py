@@ -7,70 +7,43 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 BASE_DIR = Path(__file__).resolve().parent
-PRIVATE_DIR = BASE_DIR / "private_archetypes"
 ARCHETYPES_DIR = BASE_DIR / "archetypes"
-
-# Añadir carpeta privada al path si existe en la máquina local del usuario
-if PRIVATE_DIR.exists() and str(PRIVATE_DIR) not in sys.path:
-    sys.path.insert(0, str(PRIVATE_DIR))
 
 
 class ArchetypeRegistry:
-    """Gestiona los arquetipos públicos y privados para Google Flow y TikTok."""
+    """Gestiona los arquetipos para Google Flow y TikTok basados en archivos JSON."""
 
     @classmethod
     def get_available_archetypes(cls) -> Dict[str, str]:
         """Devuelve un diccionario de todos los arquetipos disponibles."""
         available = {}
 
-        # 1. Arquetipos públicos en archetypes/
         if ARCHETYPES_DIR.exists():
-            for p in ARCHETYPES_DIR.glob("*.json"):
+            for p in sorted(ARCHETYPES_DIR.glob("*.json")):
                 if p.stem != "template":
+                    clean_name = p.stem.replace(".private", "")
                     try:
                         with open(p, "r", encoding="utf-8") as f:
                             d = json.load(f)
-                            available[p.stem] = d.get("display_name", p.stem.capitalize())
+                            available[clean_name] = d.get("display_name", clean_name.capitalize())
                     except Exception:
-                        available[p.stem] = p.stem.capitalize()
-
-        # 2. Arquetipos privados locales (si existen en private_archetypes/ de la máquina del usuario)
-        if PRIVATE_DIR.exists():
-            try:
-                import private_registry
-                if hasattr(private_registry, "get_private_available_archetypes"):
-                    available.update(private_registry.get_private_available_archetypes())
-            except Exception:
-                pass
+                        available[clean_name] = clean_name.capitalize()
 
         return available
 
     @classmethod
     def get_archetype_config(cls, name: Optional[str]) -> Dict[str, Any]:
-        """Obtiene la configuración del arquetipo indicado. Soporta arquetipos públicos y privados."""
+        """Obtiene la configuración del arquetipo indicado desde archetypes/<name>.json."""
         if not name or not str(name).strip():
             name = "explorer"
 
         clean = str(name).strip().lower()
 
-        # 1. Arquetipos privados locales (módulo privado local)
-        if PRIVATE_DIR.exists():
-            try:
-                import private_registry
-                if hasattr(private_registry, "get_private_archetype_config"):
-                    priv_cfg = private_registry.get_private_archetype_config(clean)
-                    if priv_cfg:
-                        return priv_cfg
-            except Exception as e:
-                logger_msg = f"Aviso al cargar módulo privado para '{clean}': {e}"
-                # Continuar hacia los arquetipos públicos JSON
-
-        # 2. Arquetipos públicos y personalizados (archetypes/*.json)
         from generic_engine import GenericPromptBuilder, GenericStoryGenerator
 
         possible_paths = [
             ARCHETYPES_DIR / f"{clean}.json",
-            PRIVATE_DIR / f"{clean}.json",
+            ARCHETYPES_DIR / f"{clean}.private.json",
             BASE_DIR / f"{clean}.json",
         ]
         for p in possible_paths:
@@ -78,10 +51,17 @@ class ArchetypeRegistry:
                 try:
                     with open(p, "r", encoding="utf-8") as f:
                         data = json.load(f)
+
+                    env_url = (
+                        os.getenv(f"FLOW_{clean.upper()}_PROJECT_URL")
+                        or os.getenv("FLOW_PROJECT_URL", "https://flow.google.com")
+                    )
+                    flow_url = (data.get("flow_project_url") or env_url).strip()
+
                     return {
                         "key": data.get("key", clean),
                         "display_name": data.get("display_name", clean.capitalize()),
-                        "flow_project_url": data.get("flow_project_url", ""),
+                        "flow_project_url": flow_url,
                         "character_name": data.get("character_name", f"{clean} 1"),
                         "story_generator": GenericStoryGenerator.create_class(data),
                         "prompt_builder": GenericPromptBuilder.create_class(data),
@@ -98,8 +78,8 @@ class ArchetypeRegistry:
         raise ValueError(
             f"❌ ERROR: Arquetipo desconocido '{name}'.\n\n"
             f"Arquetipos disponibles en este entorno:\n{opts}\n\n"
-            "💡 Para crear tu propio personaje:\n"
-            "   1. Copia 'archetypes/template.json' como 'archetypes/<nombre>.json'\n"
-            "   2. Edita su nombre, ropa, cómo actúa y locación\n"
-            "   3. Ejecuta: python generate_and_assemble_episode.py -a <nombre>"
+            f"💡 Para crear tu propio personaje:\n"
+            f"   1. Copia 'archetypes/template.json' como 'archetypes/{clean}.json'\n"
+            f"   2. Edita su nombre, ropa, cómo actúa y locación\n"
+            f"   3. Ejecuta: python generate_and_assemble_episode.py -a {clean}"
         )

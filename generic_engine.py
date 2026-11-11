@@ -14,8 +14,12 @@ import re
 import json
 import logging
 import urllib.request
-import urllib.error
-from typing import Dict, Any, Optional
+from pathlib import Path
+from datetime import datetime
+from typing import Dict, Any, Optional, List
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger("GenericArchetypeEngine")
 
@@ -23,14 +27,34 @@ logger = logging.getLogger("GenericArchetypeEngine")
 class GenericPromptBuilder:
     """Constructor dinámico de prompts cinematográficos basado en el archivo JSON del arquetipo."""
 
+    SWEET_VOCABULARY_MAP = [
+        (r"\bcarajos\b", "carachos"),
+        (r"\bcarajo\b", "caracho"),
+        (r"\bmierda\b", "córcholis"),
+        (r"\bcoño\b", "caracoles"),
+        (r"\bputa\b", "pucha"),
+        (r"\bjoder\b", "jolines"),
+    ]
+
+    FOURTH_WALL_BREAK_PATTERNS = [
+        (r"(?i)[¡!]?\s*(?:dejad?|deja|den|da|dejadnos|danos)\s+(?:un\s+)?like\b[^\.!\?]*[\.!\?]?", ""),
+        (r"(?i)[¡!]?\s*dale\s+like\b[^\.!\?]*[\.!\?]?", ""),
+        (r"(?i)[¡!]?\s*(?:comparte|compártelo|compartan|compartid|comparte\s+el\s+video)\b[^\.!\?]*[\.!\?]?", ""),
+        (r"(?i)[¡!]?\s*(?:suscríbete|suscribiros|suscríbanse|sígueme|síguenos)\b[^\.!\?]*[\.!\?]?", ""),
+        (r"(?i)[¡!]?\s*(?:etiqueta\s+a\s+(?:un|tu)\s+amigo|déjalo\s+en\s+los\s+comentarios)\b[^\.!\?]*[\.!\?]?", ""),
+    ]
+
     def __init__(self, config: Dict[str, Any]):
         self.config = config
         self.key = config.get("key", "custom")
         self.character_dna = config.get("character_dna", {})
+        self.companions = config.get("companions", [])
+        self.ensemble_dynamics = config.get("ensemble_dynamics", "")
         self.visual_style = config.get(
             "visual_style",
             "High-end photorealistic live-action documentary style, 35mm optical lens f/1.8."
         )
+        self.negative_constraints = config.get("negative_constraints", "")
 
     def sanitize_scene_text(self, text: str) -> str:
         clean = text or ""
@@ -41,30 +65,61 @@ class GenericPromptBuilder:
             clean = re.sub(rf"\b{danger}\b", "a través de la superficie", clean, flags=re.IGNORECASE)
         for minor in [r"\bniño\b", r"\bniña\b", r"\bbebé\b", r"\bmenor\b"]:
             clean = re.sub(rf"{minor}", "personaje", clean, flags=re.IGNORECASE)
-        return clean
+        # Sanitizar lenguaje malsonante y eliminar rupturas de cuarta pared
+        for pattern, replacement in self.SWEET_VOCABULARY_MAP:
+            clean = re.sub(pattern, replacement, clean, flags=re.IGNORECASE)
+        for pattern, replacement in self.FOURTH_WALL_BREAK_PATTERNS:
+            clean = re.sub(pattern, replacement, clean)
+        return clean.strip()
 
     def build_video_prompt(self, scene: Dict[str, Any], include_dialogue: bool = True) -> str:
         desc = self.sanitize_scene_text(scene.get("description", ""))
         cam = scene.get("camera", "Cinematic tracking shot, 35mm lens, dynamic framing")
         light = scene.get("lighting", "Atmospheric cinematic lighting, gentle rim light, soft bokeh")
 
-        char_desc = self.character_dna.get("description", "A heroic explorer character.")
+        # 1. Base del protagonista
+        char_desc = self.character_dna.get("description", "A heroic protagonist character.")
+        if self.character_dna.get("anatomy"):
+            char_desc += f" Anatomy: {self.character_dna['anatomy']}"
+        if self.character_dna.get("locomotion"):
+            char_desc += f" Locomotion: {self.character_dna['locomotion']}"
+        if self.character_dna.get("clothing"):
+            char_desc += f" Traditional Costume: {self.character_dna['clothing']}"
 
+        # 2. Base de acompañantes / escuadrón (si están presentes)
+        companions_data = scene.get("companions") or self.companions
+        companions_text = ""
+        if companions_data and isinstance(companions_data, list):
+            comp_blocks = []
+            for idx, comp in enumerate(companions_data, start=2):
+                c_name = comp.get("name", f"Companion {idx-1}")
+                c_role = comp.get("role", "Companion")
+                c_visual = comp.get("visual_desc", comp.get("personality", "Companion character"))
+                comp_blocks.append(f"Character {idx} ({c_role}): {c_name}. {c_visual}")
+            if comp_blocks:
+                companions_text = " " + " ".join(comp_blocks)
+            if self.ensemble_dynamics:
+                companions_text += f" Ensemble Dynamics: {self.ensemble_dynamics}"
+
+        # 3. Diálogos formateados
         dialogue_text = ""
         if include_dialogue and scene.get("dialogue"):
             dialogue_data = scene["dialogue"]
             if isinstance(dialogue_data, list):
                 lines = []
                 for item in dialogue_data:
+                    spk = item.get("speaker", "")
                     line_txt = self.sanitize_scene_text(item.get("line", ""))
                     if line_txt:
-                        lines.append(f'"{line_txt}"')
+                        lines.append(f'{spk}: "{line_txt}"' if spk else f'"{line_txt}"')
                 if lines:
-                    dialogue_text = f" Fast dynamic Spanish whispered dialogue: {' '.join(lines)}."
+                    dialogue_text = f" Fast dynamic Spanish dialogue: {' '.join(lines)}."
+
+        neg = f" Negative constraints: {self.negative_constraints}." if self.negative_constraints else ""
 
         full_prompt = (
-            f"Cinematic live-action photography. {char_desc} {desc}. "
-            f"Framing: {cam}. Lighting: {light}. {self.visual_style}. Sharp crisp focus.{dialogue_text}"
+            f"Cinematic live-action photography. {char_desc}{companions_text} Action: {desc}. "
+            f"Framing: {cam}. Lighting: {light}. {self.visual_style}. Sharp crisp focus.{neg}{dialogue_text}"
         )
         return full_prompt.strip()
 
@@ -141,9 +196,10 @@ class GenericStoryGenerator:
         "deepseek-v4-pro": "deepseek-v4-pro",
 
         # Moonshot Kimi (v1 y K2/K3 series)
-        "kimi": "moonshot-v1-8k",
-        "moonshot": "moonshot-v1-8k",
-        "kimi-32k": "moonshot-v1-32k",
+        "kimi": "kimi-k2.7-code",
+        "moonshot": "kimi-k2.7-code",
+        "kimi-32k": "kimi-k2.7-code",
+        "kimi-code": "kimi-k2.7-code",
         "kimi-k3": "kimi-k3.1-pro",
         "kimi-k3.1": "kimi-k3.1-pro",
         "kimi-k2.7": "kimi-k2.7-code",
@@ -162,7 +218,48 @@ class GenericStoryGenerator:
         self.key = config.get("key", "custom")
         self.display_name = config.get("display_name", self.key)
         self.character_dna = config.get("character_dna", {})
+        self.companions = config.get("companions", [])
+        self.ensemble_dynamics = config.get("ensemble_dynamics", "")
         self.world_rules = config.get("world_rules", {})
+        self.speech_guidelines = config.get("speech_guidelines", "")
+
+    def _get_history_file(self) -> Path:
+        base_dir = Path(__file__).resolve().parent
+        return base_dir / f"history_{self.key}.json"
+
+    def get_recent_locations(self, limit: int = 5) -> List[str]:
+        hist_file = self._get_history_file()
+        if not hist_file.exists():
+            return []
+        try:
+            with open(hist_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return [e.get("location") or e.get("city") for e in data[-limit:] if e.get("location") or e.get("city")]
+        except Exception:
+            return []
+
+    def record_episode(self, location: str, title: str):
+        hist_file = self._get_history_file()
+        history = []
+        if hist_file.exists():
+            try:
+                with open(hist_file, "r", encoding="utf-8") as f:
+                    history = json.load(f)
+            except Exception:
+                history = []
+        history.append({
+            "location": location.strip(),
+            "title": title.strip(),
+            "created_at": datetime.now().isoformat()
+        })
+        if len(history) > 30:
+            history = history[-30:]
+        try:
+            with open(hist_file, "w", encoding="utf-8") as f:
+                json.dump(history, f, indent=2, ensure_ascii=False)
+            logger.info(f"📝 Episodio registrado en historial ({self.key}): '{location}' - '{title}'")
+        except Exception as e:
+            logger.warning(f"No se pudo guardar historial ({self.key}): {e}")
 
     @classmethod
     def resolve_model_name(cls, m: Optional[str] = None, provider: str = "opencode") -> str:
@@ -229,71 +326,94 @@ class GenericStoryGenerator:
         return "gemini" if (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")) else "opencode"
 
     def build_prompt(self, location: Optional[str] = None, free_theme: Optional[str] = None) -> str:
-        loc = f"📍 ENTORNO: {location}" if location else f"📍 ENTORNO: {self.world_rules.get('setting', 'Un escenario cinematográfico acorde al universo.')}"
+        if location and str(location).strip().lower() not in ["random", "azar", "none", ""]:
+            loc_directive = f"📍 ENTORNO DE LA AVENTURA: Ocurre en {str(location).strip()}."
+        else:
+            recent_locs = self.get_recent_locations(limit=5)
+            avoid_clause = f"\n- Lugares visitados recientemente (EVITAR para no repetir): {', '.join(recent_locs)}" if recent_locs else ""
+            setting_desc = self.world_rules.get("setting", "Un escenario cinematográfico acorde al universo.")
+            loc_directive = f"📍 ENTORNO DE LA AVENTURA: Escoge libremente cualquier locación fascinante ({setting_desc}).{avoid_clause}"
 
         char_name = self.character_dna.get("name", "Protagonista")
         char_desc = self.character_dna.get("description", "Personaje principal")
         char_acting = self.character_dna.get("acting", "Valiente, ágil y carismático.")
+        char_clothing = self.character_dna.get("clothing", "")
+        char_locomotion = self.character_dna.get("locomotion", "")
         tone = self.world_rules.get("tone", "Misión a contrarreloj de alta adrenalina y suspenso.")
 
-        theme_txt = f"\n🎯 TEMA SUGERIDO POR EL USUARIO: {free_theme}\n" if free_theme else ""
+        theme_txt = f"\n🎯 TEMA SUGERIDO POR EL USUARIO (-ft): {free_theme}\n" if free_theme else ""
 
-        return f"""Eres un Director Creativo cinematográfico de élite especializado en contenido hiperviral de TikTok.
-Tu misión es diseñar un guion cautivador y tenso de 30 segundos (3 tomas de 10s cada una) para el protagonista de este universo.
+        companions_directive = ""
+        if self.companions:
+            comp_list = []
+            for idx, c in enumerate(self.companions, start=1):
+                c_name = c.get("name", f"Acompañante {idx}")
+                c_role = c.get("role", "Compañero")
+                c_desc = c.get("visual_desc", c.get("personality", ""))
+                comp_list.append(f"  {idx}. {c_name} ({c_role}): {c_desc}")
+            companions_directive = "\nELENCO DE ACOMPAÑANTES:\n" + "\n".join(comp_list)
+            if self.ensemble_dynamics:
+                companions_directive += f"\nDINÁMICA DE GRUPO Y COMPINCHERÍA: {self.ensemble_dynamics}\n- El protagonista lleva la voz y acción principal; los acompañantes intervienen con frases breves, oportunas y con chispa según su personalidad sin opacarlo."
 
-{loc}
+        speech_directive = f"\nDIRECTRICES DE HABLA Y VOCABULARIO:\n{self.speech_guidelines}\n" if self.speech_guidelines else ""
+
+        return f"""Eres un Director Creativo cinematográfico de élite especializado en narrativas virales para TikTok (hooks de alta retención, micro-storytelling y ritmo visual).
+Diseña un guion cautivador de 30 segundos (exactamente 3 tomas de 10s con estricta continuidad lógica y temporal) para este universo.
+
+{loc_directive}
 {theme_txt}
 
 FICHA DEL PROTAGONISTA:
 - Nombre: {char_name}
-- Descripción física y vestuario: {char_desc}
-- Biomecánica y actitud: {char_acting}
+- Descripción física y vestuario: {char_desc} {char_clothing}
+- Biomecánica y actitud: {char_acting} {char_locomotion}
 - Tono del universo: {tone}
+{companions_directive}
+{speech_directive}
+ESTRUCTURA DE TIKTOK EN 30 SEGUNDOS (3 TOMAS NARRATIVAS DE 10s CON CONTINUIDAD DIRECTA):
+- TOMA 1: HOOK VIRAL (< 3s): Interrupción de patrón visual o verbal inmediata con el protagonista en primer plano liderando la acción.
+- TOMA 2: ESCALADA Y CONTINUIDAD DIRECTA (10-20s): Continuidad lógica directa donde terminó la toma 1. Superación de obstáculo, tensión o exploración.
+- TOMA 3: REMATE MEMORABLE (20-30s): Conclusión satisfactoria, triunfo o remate simpático grupal.
+- ¡PROHIBIDO TOTALMENTE ROMPER LA CUARTA PARED!: Los personajes NUNCA hablan a la cámara ni al espectador (JAMÁS decir "dale like", "comparte" o "suscríbete").
 
-ESTRUCTURA OBLIGATORIA (3 TOMAS NARRATIVAS DE 10s):
-- Toma 1: Planteamiento y gancho inicial (primeros 3 segundos vitales de retención).
-- Toma 2: Punto de giro, obstáculo o momento de máximo riesgo a contrarreloj.
-- Toma 3: Clímax, resolución exitosa o escape triunfal.
-
-REGLAS ESTRICTAS DE CONTENIDO:
-1. Todas las descripciones visuales deben ser hiperrealistas y cinematográficas.
-2. Los diálogos deben ser en ESPAÑOL, directos, naturales, con urgencia y compinchería.
-3. Responde ÚNICAMENTE con un objeto JSON válido con la siguiente estructura exacta (sin texto previo ni posterior):
-
+Devuelve ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
 ```json
 {{
-  "title": "Título corto y épico del episodio",
-  "location": "Nombre específico del lugar",
+  "title": "Título llamativo para TikTok",
+  "location": "Nombre específico del lugar o ciudad",
+  "music_theme": "Descripción en inglés de la música de fondo sugerida",
+  "tiktok_caption": "Copy cautivador para el pie de video en TikTok",
+  "tiktok_hashtags": ["#Tag1", "#Tag2", "#Tag3"],
   "scenes": [
     {{
       "id": "toma_1",
-      "title": "Toma 1: El Desafío",
-      "description": "Acción cinematográfica visual y clara del protagonista",
+      "title": "Título Toma 1",
+      "description": "Descripción visual detallada del Hook viral (<3s) con el protagonista en primer plano",
       "dialogue": [
-        {{"speaker": "{char_name}", "voice": "Spanish (urgent)", "line": "¡Rápido, tenemos poco tiempo!"}}
+        {{"speaker": "{char_name}", "voice": "Spanish", "line": "Línea gancho del diálogo"}}
       ],
-      "camera": "Dynamic push-in, low-angle tracking shot",
-      "lighting": "Cinematic lighting, gentle rim light"
+      "camera": "Dynamic push-in, low-angle ground level macro shot",
+      "pacing_notes": "Pattern interrupt hook <3s"
     }},
     {{
       "id": "toma_2",
-      "title": "Toma 2: La Maniobra",
-      "description": "Acción tensa de superación de obstáculo",
+      "title": "Título Toma 2",
+      "description": "Descripción visual de la escalada con continuidad lógica directa",
       "dialogue": [
-        {{"speaker": "{char_name}", "voice": "Spanish (determined)", "line": "¡Ahora! ¡Tres, dos, uno... ya!"}}
+        {{"speaker": "{char_name}", "voice": "Spanish", "line": "Línea de acción de la escalada"}}
       ],
-      "camera": "Whip pan tracking shot, sharp focus",
-      "lighting": "Atmospheric contrast lighting"
+      "camera": "Whip pan tracking shot, dynamic framing",
+      "pacing_notes": "Escalada y retención"
     }},
     {{
       "id": "toma_3",
-      "title": "Toma 3: La Victoria",
-      "description": "Resolución exitosa y escape triunfal",
+      "title": "Título Toma 3",
+      "description": "Descripción visual del desenlace y remate memorable",
       "dialogue": [
-        {{"speaker": "{char_name}", "voice": "Spanish (triumphant)", "line": "¡Lo logramos! ¡Misión cumplida!"}}
+        {{"speaker": "{char_name}", "voice": "Spanish", "line": "Remate memorable final"}}
       ],
       "camera": "Cinematic closing tracking shot",
-      "lighting": "Warm triumphant lighting"
+      "pacing_notes": "Remate dentro de la ficción"
     }}
   ]
 }}
@@ -338,15 +458,19 @@ REGLAS ESTRICTAS DE CONTENIDO:
         base_url = os.getenv("OPENCODE_BASE_URL", "https://opencode.ai/zen/go/v1")
         url = f"{base_url.rstrip('/')}/chat/completions"
 
-        logger.info(f"✨ Generando guion con Opencode Go ({model_name})...")
+        temp_val = 1.0 if ("kimi" in model_name.lower() or "deepseek" in model_name.lower()) else 0.75
+        timeout_sec = 120 if ("kimi" in model_name.lower() or "deepseek" in model_name.lower()) else 60
+        max_tokens_val = 6000 if ("kimi" in model_name.lower() or "deepseek" in model_name.lower() or "minimax" in model_name.lower()) else 2500
+
+        logger.info(f"✨ Generando guion con Opencode Go ({model_name}, temp={temp_val})...")
         payload = {
             "model": model_name,
             "messages": [
                 {"role": "system", "content": "Eres un guionista cinematográfico de TikTok. Responde ÚNICAMENTE con JSON válido."},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.75,
-            "max_tokens": 1800,
+            "temperature": temp_val,
+            "max_tokens": max_tokens_val,
         }
         req = urllib.request.Request(
             url,
@@ -354,13 +478,19 @@ REGLAS ESTRICTAS DE CONTENIDO:
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {api_key}",
+                "x-opencode-session": "flow_video_session",
                 "User-Agent": "FlowVideoAutomation/2.0",
             },
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        return self._parse_json_response(data["choices"][0]["message"]["content"])
+        try:
+            with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            return self._parse_json_response(data["choices"][0]["message"]["content"])
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="replace")
+            logger.warning(f"⚠️ Opencode Go ({model_name}) devolvió HTTP {e.code}: {err_body}")
+            raise RuntimeError(f"Opencode Go ({model_name}) HTTP {e.code}: {err_body}")
 
     # ========================================================
     # 3. LLAMADA A OPENAI OFICIAL (Endpoint OpenAI v1)
@@ -447,21 +577,28 @@ REGLAS ESTRICTAS DE CONTENIDO:
 
         try:
             if active_provider == "gemini":
-                return self._call_gemini(prompt, resolved_model)
+                ep_data = self._call_gemini(prompt, resolved_model)
             elif active_provider == "openai":
-                return self._call_openai(prompt, resolved_model)
+                ep_data = self._call_openai(prompt, resolved_model)
             elif active_provider == "anthropic":
-                return self._call_anthropic(prompt, resolved_model)
+                ep_data = self._call_anthropic(prompt, resolved_model)
             else:
-                return self._call_opencode(prompt, resolved_model)
+                ep_data = self._call_opencode(prompt, resolved_model)
         except Exception as e:
             # Fallback automático a Gemini si Opencode/OpenAI/Anthropic fallan y Gemini está disponible
             gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
             if active_provider != "gemini" and gemini_key:
                 logger.warning(f"Aviso del proveedor {active_provider.upper()} ({e}). Reintentando automáticamente con Google Gemini API...")
                 gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
-                return self._call_gemini(prompt, gemini_model)
-            raise e
+                ep_data = self._call_gemini(prompt, gemini_model)
+            else:
+                raise e
+
+        # Registrar locación en el historial del arquetipo
+        loc_val = ep_data.get("location") or ep_data.get("city") or "Aventura"
+        title_val = ep_data.get("title") or f"Episodio de {self.display_name}"
+        self.record_episode(loc_val, title_val)
+        return ep_data
 
     @classmethod
     def create_class(cls, config: Dict[str, Any]):
