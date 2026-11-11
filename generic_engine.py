@@ -496,7 +496,7 @@ Devuelve ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
         payload = {
             "model": model_name,
             "messages": [
-                {"role": "system", "content": "Eres un guionista cinematográfico de TikTok. Responde ÚNICAMENTE con JSON válido."},
+                {"role": "system", "content": "Eres un guionista cinematográfico de TikTok. Responde ÚNICAMENTE con JSON estrictamente válido. Si incluyes términos encomillados dentro de diálogos o descripciones, usa comillas simples 'término' para no romper la sintaxis JSON. No dejes comas sobrantes al final de listas ni objetos."},
                 {"role": "user", "content": prompt}
             ],
             "temperature": temp_val,
