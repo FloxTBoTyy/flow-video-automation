@@ -420,9 +420,39 @@ Devuelve ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
 ```"""
 
     def _parse_json_response(self, raw_content: str) -> Dict[str, Any]:
-        """Limpia bloques de código markdown y convierte a dict."""
+        """Limpia bloques de código markdown, repara imperfecciones comunes de LLMs y convierte a dict."""
         match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw_content)
         json_str = match.group(1).strip() if match else raw_content.strip()
+
+        # Intento 1: Parseo directo estándar
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            pass
+
+        # Intento 2: Limpieza de comas sobrantes al final de listas u objetos (trailing commas)
+        cleaned = re.sub(r",\s*([\]}])", r"\1", json_str)
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+
+        # Intento 3: Normalizar comillas tipográficas (“ ”, « ») que a veces devuelven los LLMs en español
+        cleaned = cleaned.replace("“", '\\"').replace("”", '\\"').replace("«", '\\"').replace("»", '\\"')
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+
+        # Intento 4: Extraer el bloque delimitado por las llaves más externas { ... }
+        brace_match = re.search(r"(\{[\s\S]*\})", cleaned)
+        if brace_match:
+            try:
+                return json.loads(brace_match.group(1))
+            except json.JSONDecodeError:
+                pass
+
+        # Fallback final con la cadena original para registrar el error exacto
         return json.loads(json_str)
 
     # ========================================================
