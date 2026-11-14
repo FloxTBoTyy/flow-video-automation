@@ -190,15 +190,30 @@ async def inject_and_generate_take(page: Page, prompt_text: str, take_title: str
         if is_generating:
             generation_started = True
 
+        # Detectar si apareció una tarjeta de error en Flow (ej. fallo de audio o política)
+        flow_error = await page.evaluate('''() => {
+            const tiles = document.querySelectorAll('flow-video-tile, .media-tile');
+            for (const t of tiles) {
+                const txt = (t.innerText || '').toLowerCase();
+                if (txt.includes('no se pudo completar') || txt.includes('no se pudo generar') || txt.includes('could not complete')) {
+                    return t.innerText.trim().replace(/\\n+/g, ' - ');
+                }
+            }
+            return null;
+        }''')
+        if flow_error:
+            logger.error(f"❌ Error de generación detectado en Google Flow para '{take_title}': {flow_error}")
+            return False
+
         # Criterio definitivo de completitud:
         # 1. El primer clip de la galería cambió por un nuevo src válido de video de Flow
         has_new_video = bool(current_src and current_src != initial_src and "flow.google.com/asb/" in current_src)
-        # 2. O la cantidad total de tiles aumentó
-        has_more_tiles = bool(current_count > initial_count)
+        # 2. O la cantidad total de tiles aumentó con un src de video válido
+        has_more_tiles = bool(current_count > initial_count and current_src and current_src != initial_src)
 
         # Flow tarda un mínimo de 30 segundos para generar 10s de video en la nube.
         if elapsed >= 30:
-            if has_new_video or (has_more_tiles and not is_generating) or (generation_started and not is_generating):
+            if has_new_video or (has_more_tiles and not is_generating):
                 logger.info(f"🎉 ¡{take_title} GENERADO EXITOSAMENTE! (Clips: {current_count}, tiempo: {int(elapsed)}s)")
                 await page.wait_for_timeout(3000)
                 return True
