@@ -101,34 +101,19 @@ class GenericPromptBuilder:
             if self.ensemble_dynamics:
                 companions_text += f" Ensemble Dynamics: {self.ensemble_dynamics}"
 
-        # 3. Diálogos formateados para el motor de audio y sincronización labial de Google Flow
-        # Regla clave: Flow solo admite 1 voz por toma (la del ingrediente de personaje activo).
-        # Diálogos con múltiples personajes ('Cuyito: ... Kusichay: ...') o comillas internas rompen el sintetizador de Flow ("No se pudo generar el audio").
+        # 3. Diálogos formateados
         dialogue_text = ""
         if include_dialogue and scene.get("dialogue"):
             dialogue_data = scene["dialogue"]
-            if isinstance(dialogue_data, list) and dialogue_data:
-                # 1. Priorizar la línea del protagonista (o la primera línea disponible)
-                protagonist_name = (self.character_dna.get("name") or "").lower()
-                chosen_line = ""
+            if isinstance(dialogue_data, list):
+                lines = []
                 for item in dialogue_data:
-                    spk = (item.get("speaker") or "").lower()
-                    if protagonist_name and (protagonist_name in spk or spk in protagonist_name):
-                        chosen_line = item.get("line", "")
-                        break
-
-                if not chosen_line:
-                    for item in dialogue_data:
-                        if item.get("line"):
-                            chosen_line = item["line"]
-                            break
-
-                if chosen_line:
-                    clean_line = self.sanitize_scene_text(chosen_line)
-                    # Quitar comillas simples, dobles o tipográficas internas que rompen el motor de audio
-                    clean_line = clean_line.replace('"', '').replace("'", '').replace("“", "").replace("”", "").replace("«", "").replace("»", "").strip()
-                    if clean_line:
-                        dialogue_text = f' Fast dynamic Spanish dialogue: "{clean_line}".'
+                    spk = item.get("speaker", "")
+                    line_txt = self.sanitize_scene_text(item.get("line", ""))
+                    if line_txt:
+                        lines.append(f'{spk}: "{line_txt}"' if spk else f'"{line_txt}"')
+                if lines:
+                    dialogue_text = f" Fast dynamic Spanish dialogue: {' '.join(lines)}."
 
         neg = f" Negative constraints: {self.negative_constraints}." if self.negative_constraints else ""
 
@@ -368,7 +353,7 @@ class GenericStoryGenerator:
                 comp_list.append(f"  {idx}. {c_name} ({c_role}): {c_desc}")
             companions_directive = "\nELENCO DE ACOMPAÑANTES:\n" + "\n".join(comp_list)
             if self.ensemble_dynamics:
-                companions_directive += f"\nDINÁMICA DE GRUPO Y COMPINCHERÍA: {self.ensemble_dynamics}\n- El protagonista ({char_name}) lidera el foco y la voz; los acompañantes interactúan visual y gestualmente con complicidad."
+                companions_directive += f"\nDINÁMICA DE GRUPO Y COMPINCHERÍA: {self.ensemble_dynamics}\n- El protagonista lleva la voz y acción principal; los acompañantes intervienen con frases breves, oportunas y con chispa según su personalidad sin opacarlo."
 
         speech_directive = f"\nDIRECTRICES DE HABLA Y VOCABULARIO:\n{self.speech_guidelines}\n" if self.speech_guidelines else ""
 
@@ -389,7 +374,6 @@ ESTRUCTURA DE TIKTOK EN 30 SEGUNDOS (3 TOMAS NARRATIVAS DE 10s CON CONTINUIDAD D
 - TOMA 1: HOOK VIRAL (< 3s): Interrupción de patrón visual o verbal inmediata con el protagonista en primer plano liderando la acción.
 - TOMA 2: ESCALADA Y CONTINUIDAD DIRECTA (10-20s): Continuidad lógica directa donde terminó la toma 1. Superación de obstáculo, tensión o exploración.
 - TOMA 3: REMATE MEMORABLE (20-30s): Conclusión satisfactoria, triunfo o remate simpático grupal.
-- REGLA CRÍTICA DE AUDIO PARA GOOGLE FLOW: Google Flow solo genera la voz del protagonista ({char_name}). En cada toma de 10s debe haber EXACTAMENTE 1 sola frase hablada (máximo 12 a 15 palabras), dicha por {char_name}. NUNCA generes diálogos múltiples de varios personajes en la misma toma. Las reacciones de los acompañantes deben ser VISUALES (sonrisas, miradas, gestos con las patitas).
 - ¡PROHIBIDO TOTALMENTE ROMPER LA CUARTA PARED!: Los personajes NUNCA hablan a la cámara ni al espectador (JAMÁS decir "dale like", "comparte" o "suscríbete").
 
 Devuelve ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
