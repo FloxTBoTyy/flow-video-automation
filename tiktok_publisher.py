@@ -74,7 +74,7 @@ class TikTokPublisher:
             clean_url = self.page.url.split("#")[0]
             if force_reset or "/content" in clean_url or "upload" not in clean_url or "creator_center" not in clean_url:
                 logger.info(f"🔄 Restableciendo pestaña de TikTok a la pantalla inicial de subida ({TIKTOK_UPLOAD_URL})...")
-                await self.page.goto(TIKTOK_UPLOAD_URL, wait_until="domcontentloaded")
+                await self.page.goto(TIKTOK_UPLOAD_URL, wait_until="domcontentloaded", timeout=180000)
                 await self.page.wait_for_timeout(3000)
             else:
                 logger.info(f"Pestaña de TikTok Studio lista en pantalla de subida: {self.page.url}")
@@ -85,16 +85,16 @@ class TikTokPublisher:
         logger.info(f"Abriendo TikTok Studio Upload ({TIKTOK_UPLOAD_URL})...")
         if self.context.pages and self.context.pages[0].url in ("about:blank", "chrome://newtab/"):
             self.page = self.context.pages[0]
-            await self.page.goto(TIKTOK_UPLOAD_URL, wait_until="domcontentloaded")
+            await self.page.goto(TIKTOK_UPLOAD_URL, wait_until="domcontentloaded", timeout=180000)
         else:
             self.page = await self.context.new_page()
-            await self.page.goto(TIKTOK_UPLOAD_URL, wait_until="domcontentloaded")
+            await self.page.goto(TIKTOK_UPLOAD_URL, wait_until="domcontentloaded", timeout=180000)
 
         await self.page.bring_to_front()
         await self.page.wait_for_timeout(3000)
         return self.page
 
-    async def upload_video(self, video_path: Path | str, timeout_seconds: int = 120) -> bool:
+    async def upload_video(self, video_path: Path | str, timeout_seconds: int = 300) -> bool:
         """Sube un video usando el input[type=file] para evitar el diálogo GTK del sistema operativo."""
         if not self.page:
             await self.get_or_open_upload_page()
@@ -117,27 +117,39 @@ class TikTokPublisher:
                 return True
             else:
                 logger.info("Video distinto detectado. Usando 'Sustituir'...")
-                async with self.page.expect_file_chooser() as fc_info:
-                    await replace_btn.click()
+                async with self.page.expect_file_chooser(timeout=60000) as fc_info:
+                    await replace_btn.click(timeout=60000)
                 file_chooser = await fc_info.value
-                await file_chooser.set_files(str(path_obj))
+                await file_chooser.set_files(str(path_obj), timeout=180000)
         else:
-            # Localizar el input de archivo en la pantalla inicial de subida
+            # Localizar el input de archivo en la pantalla inicial de subida (esperando hasta 180s / 3 min a que cargue TikTok Studio)
             file_input = self.page.locator('input[type="file"]').first
+            for sec in range(180):
+                if await file_input.count() > 0:
+                    break
+                if sec > 0 and sec % 15 == 0:
+                    logger.info(f"Esperando a que cargue el selector de subida de TikTok Studio... ({sec}s/180s)")
+                await self.page.wait_for_timeout(1000)
+
             if await file_input.count() == 0:
-                logger.error("No se encontró el elemento input[type='file'] en TikTok Studio.")
+                if "login" in self.page.url.lower():
+                    logger.error("❌ No has iniciado sesión en TikTok Studio en este navegador. Inicia sesión en la pestaña de TikTok y vuelve a intentar.")
+                else:
+                    logger.error(f"No se encontró el elemento input[type='file'] en TikTok Studio (URL actual: {self.page.url}).")
                 return False
 
-            logger.info("Adjuntando archivo directamente vía CDP (sin abrir el explorador de archivos)...")
-            await file_input.set_input_files(str(path_obj))
+            logger.info("Adjuntando archivo directamente vía CDP (sin abrir el explorador de archivos, máx. 180s)...")
+            await file_input.set_input_files(str(path_obj), timeout=180000)
 
         # Esperar a que la subida se procese y aparezca el indicador de "Cargado" o el formulario de detalles
-        logger.info("Esperando a que TikTok procese la subida del video...")
+        logger.info(f"Esperando a que TikTok procese la subida del video (máx. {timeout_seconds}s)...")
         start_time = asyncio.get_event_loop().time()
+        last_log = 0
 
         while asyncio.get_event_loop().time() - start_time < timeout_seconds:
-            # Comprobar si el texto 'Cargado' está presente
-            cargado_el = self.page.locator('text=Cargado').first
+            elapsed = int(asyncio.get_event_loop().time() - start_time)
+            # Comprobar si el texto 'Cargado' o 'Uploaded' está presente
+            cargado_el = self.page.locator('text=Cargado, text=Uploaded').first
             has_cargado = await cargado_el.count() > 0
 
             # Comprobar si el editor de descripción ya está visible
@@ -145,9 +157,13 @@ class TikTokPublisher:
             has_desc = await desc_el.count() > 0 and await desc_el.is_visible()
 
             if has_cargado or has_desc:
-                logger.info("✅ ¡Video subido y procesado con éxito por TikTok Studio!")
+                logger.info(f"✅ ¡Video subido y procesado con éxito por TikTok Studio! ({elapsed}s)")
                 await self.page.wait_for_timeout(2000)
                 return True
+
+            if elapsed - last_log >= 15:
+                logger.info(f"Subiendo/procesando video en TikTok Studio... ({elapsed}s)")
+                last_log = elapsed
 
             await self.page.wait_for_timeout(2000)
 
@@ -386,11 +402,18 @@ class TikTokPublisher:
         await pub_btn.scroll_into_view_if_needed()
         await self.page.wait_for_timeout(1000)
 
-        # Verificar si está habilitado
-        aria_disabled = await pub_btn.get_attribute("aria-disabled")
-        disabled_attr = await pub_btn.get_attribute("disabled")
-        if aria_disabled == "true" or disabled_attr is not None:
-            logger.warning("El botón 'Publicar' está temporalmente deshabilitado. Esperando 3 segundos...")
+        # Verificar si está habilitado (esperar hasta 180s si el video aún está terminando de subirse)
+        wait_enable_start = asyncio.get_event_loop().time()
+        last_enable_log = 0
+        while asyncio.get_event_loop().time() - wait_enable_start < 180:
+            aria_disabled = await pub_btn.get_attribute("aria-disabled")
+            disabled_attr = await pub_btn.get_attribute("disabled")
+            if aria_disabled != "true" and disabled_attr is None:
+                break
+            elapsed_enable = int(asyncio.get_event_loop().time() - wait_enable_start)
+            if elapsed_enable == 0 or elapsed_enable - last_enable_log >= 15:
+                logger.info(f"⏳ Botón 'Publicar' aún deshabilitado (esperando a que termine la subida en TikTok)... ({elapsed_enable}s)")
+                last_enable_log = elapsed_enable
             await self.page.wait_for_timeout(3000)
 
         if dry_run:
@@ -423,12 +446,13 @@ class TikTokPublisher:
                 break
             await self.page.wait_for_timeout(1000)
 
-        # 4. Esperar hasta 60 segundos a que TikTok procese la subida y confirme la publicación
-        logger.info("Esperando confirmación de publicación de TikTok (redirección a /content)...")
+        # 4. Esperar hasta 180 segundos a que TikTok procese la subida y confirme la publicación
+        logger.info("Esperando confirmación de publicación de TikTok (redirección a /content, máx. 180s)...")
         published = False
         start_wait = asyncio.get_event_loop().time()
+        last_pub_log = 0
 
-        while asyncio.get_event_loop().time() - start_wait < 60:
+        while asyncio.get_event_loop().time() - start_wait < 180:
             current_url = self.page.url
             if "/content" in current_url:
                 logger.info(f"🎉 ¡VIDEO PUBLICADO CON ÉXITO EN TIKTOK! (Redirección confirmada a {current_url})")
@@ -451,6 +475,11 @@ class TikTokPublisher:
                 published = True
                 break
 
+            elapsed_pub = int(asyncio.get_event_loop().time() - start_wait)
+            if elapsed_pub - last_pub_log >= 15 and elapsed_pub > 0:
+                logger.info(f"Esperando confirmación de TikTok... ({elapsed_pub}s)")
+                last_pub_log = elapsed_pub
+
             await self.page.wait_for_timeout(2000)
 
         if published:
@@ -460,7 +489,7 @@ class TikTokPublisher:
             await self.page.wait_for_timeout(2000)
             return True
         else:
-            logger.error("No se confirmó la publicación tras 60 segundos. No se forzó la navegación para evitar cancelar subidas en curso.")
+            logger.error("No se confirmó la publicación tras 180 segundos. No se forzó la navegación para evitar cancelar subidas en curso.")
             return False
 
     async def publish_video_pipeline(

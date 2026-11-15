@@ -385,12 +385,15 @@ async def open_media_picker(page: Page) -> bool:
         if await empty_add.count() > 0:
             await empty_add.click()
             await page.wait_for_timeout(600)
-            # Si se abre un submenú desplegable, pulsar 'Agregar clip' / 'Añadir clip'
+            # Si se abre un submenú desplegable, pulsar 'Agregar/Añadir...'
             await page.evaluate('''() => {
-                const all = Array.from(document.querySelectorAll('.cdk-overlay-container *'));
+                const all = Array.from(document.querySelectorAll('.cdk-overlay-container [role="menuitem"], .cdk-overlay-container button, .cdk-overlay-container *'));
                 const item = all.reverse().find(el => {
                     const txt = (el.innerText || '').trim();
-                    return (txt.includes('Agregar clip') || txt.includes('Añadir clip') || txt.includes('Add clip')) && el.children.length <= 1;
+                    const rect = el.getBoundingClientRect();
+                    return rect.width > 0 && rect.height > 0 && (
+                        txt.includes('Agregar') || txt.includes('Añadir') || txt.includes('Add')
+                    ) && el.children.length <= 3;
                 });
                 if (item) item.click();
             }''')
@@ -403,16 +406,38 @@ async def open_media_picker(page: Page) -> bool:
             await last_clip.evaluate("el => el.click()")
         await page.wait_for_timeout(400)
 
-        clicked_add_btn = await page.evaluate('''() => {
-            const addBtn = document.querySelector(
-                'button.add-clip-button, ' +
-                'flow-scene-timeline button[aria-label*="Agregar" i], ' +
-                'flow-scene-timeline button[aria-label*="Añadir" i], ' +
-                'flow-scene-timeline button[aria-label*="Add" i]'
-            );
-            if (addBtn) { addBtn.click(); return true; }
-            return false;
-        }''')
+        add_btn_loc = page.locator(
+            'button.add-clip-button, '
+            'button[aria-label*="Agregar clip" i], '
+            'button[aria-label*="Añadir clip" i], '
+            'button[aria-label*="Add clip" i], '
+            'flow-scene-timeline button[aria-label*="Agregar" i], '
+            'flow-scene-timeline button[aria-label*="Añadir" i], '
+            'flow-scene-timeline button[aria-label*="Add" i]'
+        ).last
+
+        clicked_add_btn = False
+        if await add_btn_loc.count() > 0 and await add_btn_loc.is_visible():
+            try:
+                await add_btn_loc.click(timeout=2000)
+                clicked_add_btn = True
+            except Exception:
+                pass
+
+        if not clicked_add_btn:
+            clicked_add_btn = await page.evaluate('''() => {
+                const addBtn = document.querySelector(
+                    'button.add-clip-button, ' +
+                    'button[aria-label*="Agregar clip" i], ' +
+                    'button[aria-label*="Añadir clip" i], ' +
+                    'button[aria-label*="Add clip" i], ' +
+                    'flow-scene-timeline button[aria-label*="Agregar" i], ' +
+                    'flow-scene-timeline button[aria-label*="Añadir" i], ' +
+                    'flow-scene-timeline button[aria-label*="Add" i]'
+                );
+                if (addBtn) { addBtn.click(); return true; }
+                return false;
+            }''')
 
         if not clicked_add_btn:
             box = await last_clip.bounding_box()
@@ -424,10 +449,13 @@ async def open_media_picker(page: Page) -> bool:
 
         await page.wait_for_timeout(400)
         await page.evaluate('''() => {
-            const all = Array.from(document.querySelectorAll('.cdk-overlay-container *'));
+            const all = Array.from(document.querySelectorAll('.cdk-overlay-container [role="menuitem"], .cdk-overlay-container button, .cdk-overlay-container *'));
             const item = all.reverse().find(el => {
                 const txt = (el.innerText || '').trim();
-                return (txt.includes('Agregar clip') || txt.includes('Añadir clip') || txt.includes('Add clip')) && el.children.length <= 1;
+                const rect = el.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0 && (
+                    txt.includes('Agregar') || txt.includes('Añadir') || txt.includes('Insertar') || txt.includes('Add')
+                ) && el.children.length <= 3;
             });
             if (item) item.click();
         }''')
@@ -460,30 +488,51 @@ async def add_clip_by_index(page: Page, index: int, label: str) -> bool:
     await target_btn.click()
     await page.wait_for_timeout(800)
 
-    confirm = page.locator(
-        'button:has-text("Agregar contenido multimedia"), '
-        'button:has-text("Añadir contenido multimedia"), '
-        'button:has-text("Add media")'
-    ).first
+    confirm = dialog.locator(
+        'button:not(.asset-item):has-text("Agregar"), '
+        'button:not(.asset-item):has-text("Añadir"), '
+        'button:not(.asset-item):has-text("Insertar"), '
+        'button:not(.asset-item):has-text("Add")'
+    ).last
     try:
         await confirm.wait_for(state="visible", timeout=4000)
+        btn_txt = (await confirm.inner_text()).strip().replace("\n", " ")
         await confirm.click()
-        logger.info(f"✅ {label} añadido exitosamente.")
+        logger.info(f"✅ {label} añadido exitosamente (botón: '{btn_txt}').")
         await page.wait_for_timeout(2500)
         return True
     except Exception:
         confirmed_js = await page.evaluate('''() => {
-            const btn = Array.from(document.querySelectorAll('button')).find(b => {
-                const t = b.innerText || '';
-                return t.includes('Agregar contenido multimedia') || t.includes('Añadir contenido multimedia') || t.includes('Add media');
+            const dlg = document.querySelector('mat-dialog-container, flow-media-picker-dialog, [role="dialog"]') || document;
+            const btns = Array.from(dlg.querySelectorAll('button:not(.asset-item)'));
+            const btn = btns.reverse().find(b => {
+                const t = (b.innerText || '').trim().toLowerCase();
+                return !b.disabled && (
+                    t.includes('agregar') || t.includes('añadir') || t.includes('insertar') || t.includes('add')
+                );
             });
-            if (btn) { btn.click(); return true; }
-            return false;
+            if (btn) {
+                const txt = (btn.innerText || '').trim();
+                btn.click();
+                return txt || 'OK';
+            }
+            return null;
         }''')
         if confirmed_js:
-            logger.info(f"✅ {label} añadido vía JS.")
+            logger.info(f"✅ {label} añadido vía JS (botón: '{confirmed_js}').")
             await page.wait_for_timeout(2500)
             return True
+
+        dlg_btns = await page.evaluate('''() => {
+            const dlg = document.querySelector('mat-dialog-container, flow-media-picker-dialog, [role="dialog"]');
+            if (!dlg) return ['NO_DIALOG'];
+            return Array.from(dlg.querySelectorAll('button:not(.asset-item)')).map(b => ({
+                text: (b.innerText || '').trim().replace(/\\n+/g, ' '),
+                aria: b.getAttribute('aria-label') || '',
+                disabled: b.disabled
+            }));
+        }''')
+        logger.warning(f"⚠️ No se encontró botón de confirmación en el modal para {label}. Botones del modal: {dlg_btns}")
 
     return False
 
