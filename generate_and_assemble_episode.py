@@ -575,6 +575,7 @@ async def run_full_pipeline(
     resume_last: bool = False,
     no_assemble: bool = False,
     provider: Optional[str] = None,
+    skip_sound: bool = False,
 ):
     from config_archetypes import ArchetypeRegistry
     archetype_cfg = ArchetypeRegistry.get_archetype_config(archetype)
@@ -822,11 +823,13 @@ async def run_full_pipeline(
             publisher = TikTokPublisher()
             caption = ep_data.get("tiktok_caption") or archetype_cfg["tiktok_default_caption"]
             hashtags = ep_data.get("tiktok_hashtags") or archetype_cfg["tiktok_default_hashtags"]
+            sound_cfg = None if skip_sound else archetype_cfg.get("tiktok_sound")
             await publisher.publish_video_pipeline(
                 video_path=final_video_path,
                 caption=caption,
                 hashtags=hashtags,
                 dry_run=tiktok_dry_run,
+                tiktok_sound=sound_cfg,
             )
     else:
         logger.error("No se pudo completar la descarga final.")
@@ -874,6 +877,7 @@ if __name__ == "__main__":
     parser.add_argument("--resume", "--reuse-last", action="store_true", help="Reutiliza la última historia guardada en caché (last_episode_<arquetipo>.json).")
     parser.add_argument("--provider", "-p", type=str, default=None, choices=["gemini", "opencode", "openai", "anthropic"], help="Proveedor de IA: 'gemini', 'opencode', 'openai', 'anthropic' (por defecto: auto-detectado o AI_PROVIDER en .env)")
     parser.add_argument("--no-assemble", "--skip-assemble", action="store_true", help="Solo generar los clips en Flow sin ensamblarlos en la línea de tiempo ni exportar.")
+    parser.add_argument("--skip-sound", "--no-sound", action="store_true", help="Omitir adición de música/sonido en TikTok Studio")
 
     args = parser.parse_args()
 
@@ -945,4 +949,5 @@ if __name__ == "__main__":
         resume_last=args.resume,
         no_assemble=args.no_assemble,
         provider=args.provider,
+        skip_sound=args.skip_sound,
     ))

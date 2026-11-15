@@ -68,6 +68,7 @@ class ArchetypeRegistry:
                         "video_prefix": data.get("video_prefix", clean),
                         "tiktok_default_caption": data.get("tiktok_default_caption", f"¡Aventura de {clean}! ✨"),
                         "tiktok_default_hashtags": data.get("tiktok_default_hashtags", ["#Aventura", "#Viral", "#Cine"]),
+                        "tiktok_sound": data.get("tiktok_sound"),
                     }
                 except Exception as e:
                     raise ValueError(f"❌ Error al cargar arquetipo desde {p}: {e}")

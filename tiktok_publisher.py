@@ -268,6 +268,110 @@ class TikTokPublisher:
         logger.info("✅ Estado del interruptor actualizado.")
         return True
 
+    async def configure_sound(
+        self,
+        query: str = "alpaquitay",
+        sound_title: str = "original sound - rolitas._.cm",
+        volume_db: int = -20
+    ) -> bool:
+        """Añade una pista musical de fondo desde el editor de sonidos de TikTok y calibra su volumen."""
+        if not self.page:
+            return False
+
+        logger.info(f"🎵 [SONIDOS TIKTOK] Configurando sonido de fondo: '{query}' ({sound_title}) a {volume_db} dB...")
+
+        # 1. Localizar y hacer clic en el botón 'Sonidos' debajo del preview del teléfono
+        sonidos_btn = self.page.locator('button.editor-entrance:has-text("Sonidos")').first
+        if await sonidos_btn.count() == 0 or not await sonidos_btn.is_visible():
+            sonidos_btn = self.page.locator('button:text-is("Sonidos"), button:has-text("Sonidos")').last
+
+        if await sonidos_btn.count() == 0 or not await sonidos_btn.is_visible():
+            logger.warning("No se encontró el botón de entrada a 'Sonidos'. Saltando configuración de música.")
+            return False
+
+        logger.info("Abriendo panel de sonidos de TikTok Studio...")
+        await sonidos_btn.click()
+        await self.page.wait_for_timeout(2500)
+
+        # 2. Localizar el buscador de sonidos
+        search_input = self.page.locator('input[placeholder="Buscar sonidos"], input[placeholder*="Buscar sonidos" i]').first
+        if await search_input.count() == 0:
+            logger.warning("No se encontró el campo de búsqueda de sonidos.")
+            return False
+
+        logger.info(f"Buscando '{query}' en TikTok Sonidos...")
+        await search_input.click()
+        await search_input.fill(query)
+        await self.page.wait_for_timeout(500)
+        await self.page.keyboard.press("Enter")
+        await self.page.wait_for_timeout(3000)
+
+        # 3. Localizar la tarjeta deseada (.MusicPanelMusicItem__content)
+        target_card = None
+        if sound_title:
+            sound_card = self.page.locator(".MusicPanelMusicItem__content").filter(has_text=sound_title).first
+            if await sound_card.count() > 0:
+                target_card = sound_card
+
+        if not target_card or await target_card.count() == 0:
+            logger.info("Buscando 2ª opción en la lista de resultados de sonido...")
+            target_card = self.page.locator(".MusicPanelMusicItem__content").nth(1)
+
+        if await target_card.count() == 0:
+            logger.warning(f"No se encontró la tarjeta del sonido '{sound_title}' ni la 2ª opción.")
+            cancel_btn = self.page.locator('button:text-is("Cancelar")').first
+            if await cancel_btn.count() > 0:
+                await cancel_btn.click()
+            return False
+
+        card_title = (await target_card.inner_text()).split("\n")[0]
+        logger.info(f"Seleccionando sonido: '{card_title}'...")
+
+        # Pulsar botón de adición (+)
+        add_btn = target_card.locator("button.Button__root--type-primary, button").first
+        await add_btn.click()
+        await self.page.wait_for_timeout(2500)
+
+        # 4. Asegurar selección de la pista de audio en la línea de tiempo si es necesario
+        vol_input = self.page.locator('div:has-text("dB") input.PropSettingInput__input, input.PropSettingInput__input').first
+        if await vol_input.count() == 0 or not await vol_input.is_visible():
+            logger.info("Haciendo clic explícito en la pista de audio en la línea de tiempo...")
+            audio_track = self.page.locator('.Timeline__movArea, [class*="track"], [class*="timeline"]').filter(has_text="sound").first
+            if await audio_track.count() > 0:
+                await audio_track.click()
+                await self.page.wait_for_timeout(1000)
+
+        # 5. Ajustar el volumen a volume_db (ej: -20 dB)
+        vol_input = self.page.locator('div:has-text("dB") input.PropSettingInput__input, input.PropSettingInput__input').first
+        if await vol_input.count() > 0 and await vol_input.is_visible():
+            logger.info(f"Ajustando volumen de la música a {volume_db} dB...")
+            await vol_input.click()
+            await self.page.keyboard.press("Control+A")
+            await self.page.keyboard.press("Backspace")
+            await self.page.keyboard.type(str(volume_db))
+            await self.page.keyboard.press("Enter")
+            await self.page.wait_for_timeout(1000)
+        else:
+            logger.warning("No se localizó el campo de entrada de volumen de audio.")
+
+        # 6. Hacer clic en 'Guardar'
+        guardar_btn = self.page.locator('button.Button__root--type-primary:has-text("Guardar"), button:text-is("Guardar")').first
+        if await guardar_btn.count() > 0:
+            logger.info("Guardando cambios de audio en el editor...")
+            await guardar_btn.click()
+            for _ in range(20):
+                await self.page.wait_for_timeout(1000)
+                is_open = await self.page.locator('button.Button__root--type-primary:has-text("Guardar")').is_visible()
+                if not is_open:
+                    logger.info("✅ Audio configurado y guardado con éxito. Retorno a la pantalla de publicación.")
+                    await self.page.wait_for_timeout(1500)
+                    return True
+            logger.info("✅ Procesamiento de audio finalizado.")
+            return True
+        else:
+            logger.warning("No se encontró el botón 'Guardar' en el editor de audio.")
+            return False
+
     async def publish(self, dry_run: bool = False) -> bool:
         """Hace clic en el botón 'Publicar' para subir el video a TikTok."""
         if not self.page:
@@ -290,7 +394,7 @@ class TikTokPublisher:
             await self.page.wait_for_timeout(3000)
 
         if dry_run:
-            logger.info("🔍 MODO DRY-RUN: El video, la descripción, el scroll y la etiqueta de IA están completamente listos.")
+            logger.info("🔍 MODO DRY-RUN: El video, la descripción, el scroll, el sonido y la etiqueta de IA están completamente listos.")
             logger.info("   Botón 'Publicar' visible en pantalla. NO se hizo clic para permitir tu confirmación.")
             return True
 
@@ -331,7 +435,6 @@ class TikTokPublisher:
                 published = True
                 break
 
-            # Si el modal "Publicar ahora" aparece con retraso durante la espera, confirmarlo
             confirm_modal_btn = self.page.locator(
                 'div[role="dialog"] button:has-text("Publicar ahora"), '
                 'button:has-text("Publicar ahora"), '
@@ -351,9 +454,7 @@ class TikTokPublisher:
             await self.page.wait_for_timeout(2000)
 
         if published:
-            # Esperar 3 segundos para que TikTok asiente la publicación en su base de datos
             await self.page.wait_for_timeout(3000)
-            # Restablecer la pestaña a la pantalla inicial de subida
             logger.info(f"🔄 Restableciendo la pestaña de TikTok a la pantalla inicial de subida ({TIKTOK_UPLOAD_URL})...")
             await self.page.goto(TIKTOK_UPLOAD_URL, wait_until="domcontentloaded")
             await self.page.wait_for_timeout(2000)
@@ -368,6 +469,7 @@ class TikTokPublisher:
         caption: str,
         hashtags: Optional[List[str]] = None,
         dry_run: bool = False,
+        tiktok_sound: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Ejecuta el flujo completo de publicación en TikTok Studio."""
         print("\n" + "=" * 65)
@@ -377,6 +479,8 @@ class TikTokPublisher:
         print(f"📝 Caption: {caption}")
         print(f"🏷️ Hashtags: {hashtags}")
         print(f"🛡️ Modo Dry-Run: {dry_run}")
+        if tiktok_sound and tiktok_sound.get("enabled", True):
+            print(f"🎵 Sonido: '{tiktok_sound.get('query')}' ({tiktok_sound.get('title')}) @ {tiktok_sound.get('volume_db', -20)} dB")
         print("=" * 65 + "\n")
 
         # 1. Conectar al navegador
@@ -400,7 +504,14 @@ class TikTokPublisher:
         if not await self.enable_ai_content_label():
             logger.warning("No se pudo confirmar la etiqueta de IA, continuando...")
 
-        # 6. Publicar
+        # 6. Configurar sonido de fondo (justo antes de publicar)
+        if tiktok_sound and tiktok_sound.get("enabled", True):
+            s_query = tiktok_sound.get("query", "alpaquitay")
+            s_title = tiktok_sound.get("title", "original sound - rolitas._.cm")
+            s_vol = int(tiktok_sound.get("volume_db", -20))
+            await self.configure_sound(query=s_query, sound_title=s_title, volume_db=s_vol)
+
+        # 7. Publicar
         success = await self.publish(dry_run=dry_run)
 
         # Cerrar conexión CDP (mantiene el navegador del usuario abierto)
@@ -419,10 +530,13 @@ async def main():
     parser.add_argument("--hashtags", "-t", nargs="+", default=["ia", "googleflow", "cine", "viral", "video"], help="Lista de hashtags")
     parser.add_argument("--dry-run", action="store_true", help="Carga el video, rellena los datos y activa IA pero NO hace clic en Publicar")
     parser.add_argument("--publish", action="store_true", help="Publica definitivamente el video")
+    parser.add_argument("--sound-query", type=str, default=None, help="Búsqueda para la pista musical en TikTok (ej. alpaquitay)")
+    parser.add_argument("--sound-title", type=str, default=None, help="Título exacto de la pista en TikTok")
+    parser.add_argument("--sound-volume", type=int, default=-20, help="Volumen en dB para la pista de fondo (defecto: -20)")
+    parser.add_argument("--skip-sound", action="store_true", help="Omitir adición de sonido de fondo en TikTok")
 
     args = parser.parse_args()
 
-    # Si no se pasó video, buscar el más reciente en output_videos
     video_to_publish = args.video
     if not video_to_publish:
         output_dir = Path("output_videos")
@@ -434,8 +548,16 @@ async def main():
             logger.error("No se encontró ningún archivo .mp4 en output_videos/.")
             sys.exit(1)
 
-    # Por defecto, si no se especifica --publish, ejecutamos en dry_run por seguridad a menos que se indique explícitamente
     is_dry_run = args.dry_run or (not args.publish)
+
+    sound_cfg = None
+    if not args.skip_sound and (args.sound_query or args.sound_title):
+        sound_cfg = {
+            "enabled": True,
+            "query": args.sound_query or "alpaquitay",
+            "title": args.sound_title or "original sound - rolitas._.cm",
+            "volume_db": args.sound_volume,
+        }
 
     publisher = TikTokPublisher()
     await publisher.publish_video_pipeline(
@@ -443,6 +565,7 @@ async def main():
         caption=args.caption,
         hashtags=args.hashtags,
         dry_run=is_dry_run,
+        tiktok_sound=sound_cfg,
     )
 
 
