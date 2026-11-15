@@ -230,19 +230,28 @@ class FlowClient:
             logger.info("El ingrediente del personaje ya está presente en el cuadro de instrucción.")
             return True
 
-        # 1. Buscar y pulsar el botón '+' con aria-label 'Agregar ingredientes al cuadro de instrucción'
-        add_btn = self.page.locator('button[aria-label*="Agregar ingredientes al cuadro de instrucción" i]').first
+        # 1. Buscar y pulsar el botón '+' con aria-label 'Agregar/Añadir ingredientes al cuadro de instrucción'
+        add_btn = self.page.locator(
+            'button[aria-label*="Agregar ingredientes al cuadro de instrucción" i], '
+            'button[aria-label*="Añadir ingredientes al cuadro de instrucción" i], '
+            'button[aria-label*="Add ingredients" i]'
+        ).first
         if await add_btn.count() > 0 and await add_btn.is_visible():
             await add_btn.click()
             await self.page.wait_for_timeout(600)
-            logger.info("Botón '+' (Agregar ingredientes) presionado.")
+            logger.info("Botón '+' (Agregar/Añadir ingredientes) presionado.")
 
-        # 2. En el menú emergente (.cdk-overlay-container), hacer clic en 'Personajes'
-        pers_item = self.page.locator('.cdk-overlay-container mat-list-item:has-text("Personajes")').first
+        # 2. En el menú emergente (.cdk-overlay-container), hacer clic en 'Personajes' o 'Caracteres'
+        pers_item = self.page.locator(
+            '.cdk-overlay-container mat-list-item:has-text("Personajes"), '
+            '.cdk-overlay-container mat-list-item:has-text("Caracteres"), '
+            '.cdk-overlay-container *:has-text("Personajes"), '
+            '.cdk-overlay-container *:has-text("Caracteres")'
+        ).first
         if await pers_item.count() > 0 and await pers_item.is_visible():
             await pers_item.click()
             await self.page.wait_for_timeout(600)
-            logger.info("Categoría 'Personajes' seleccionada en el menú.")
+            logger.info("Categoría 'Personajes / Caracteres' seleccionada en el menú.")
 
         # 3. Localizar y seleccionar la tarjeta del personaje
         char_card = self.page.locator('.cdk-overlay-container').locator(f'text={character_name}').last
@@ -368,16 +377,25 @@ class FlowClient:
             return False
 
         logger.info("Añadiendo clip a la línea de tiempo de la escena...")
-        add_clip_btn = self.page.locator('button[aria-label="Agregar clip"]').first
+        add_clip_btn = self.page.locator(
+            'button[aria-label*="Agregar clip" i], '
+            'button[aria-label*="Añadir clip" i], '
+            'button[aria-label*="Add clip" i]'
+        ).first
         if await add_clip_btn.count() == 0:
-            logger.error("No se encontró el botón 'Agregar clip' en la línea de tiempo.")
+            logger.error("No se encontró el botón 'Agregar/Añadir clip' en la línea de tiempo.")
             return False
 
         await add_clip_btn.click()
         await self.page.wait_for_timeout(600)
 
-        # En el menú desplegable, pulsar 'Agregar clip'
-        menu_add = self.page.locator('.cdk-overlay-container button:has-text("Agregar clip")').first
+        # En el menú desplegable, pulsar 'Agregar clip' / 'Añadir clip'
+        menu_add = self.page.locator(
+            '.cdk-overlay-container button:has-text("Agregar clip"), '
+            '.cdk-overlay-container button:has-text("Añadir clip"), '
+            '.cdk-overlay-container *:has-text("Agregar clip"), '
+            '.cdk-overlay-container *:has-text("Añadir clip")'
+        ).first
         if await menu_add.count() > 0:
             await menu_add.click()
             await self.page.wait_for_timeout(1000)

@@ -96,11 +96,20 @@ async def ensure_character_ingredient(page: Page, character_name: Optional[str] 
         logger.info(f"Chip del personaje '{char_label}' ya activo.")
         return True
 
-    add_btn = page.locator('button[aria-label*="Agregar ingredientes al cuadro de instrucción" i]').first
+    add_btn = page.locator(
+        'button[aria-label*="Agregar ingredientes" i], '
+        'button[aria-label*="Añadir ingredientes" i], '
+        'button[aria-label*="Add ingredients" i]'
+    ).first
     if await add_btn.count() > 0 and await add_btn.is_visible():
         await add_btn.click()
         await page.wait_for_timeout(600)
-        pers_item = page.locator('.cdk-overlay-container mat-list-item:has-text("Personajes")').first
+        pers_item = page.locator(
+            '.cdk-overlay-container mat-list-item:has-text("Personajes"), '
+            '.cdk-overlay-container mat-list-item:has-text("Caracteres"), '
+            '.cdk-overlay-container [role="menuitem"]:has-text("Personajes"), '
+            '.cdk-overlay-container [role="menuitem"]:has-text("Caracteres")'
+        ).first
         if await pers_item.count() > 0 and await pers_item.is_visible():
             await pers_item.click()
             await page.wait_for_timeout(600)
@@ -250,12 +259,20 @@ async def create_new_scene(page: Page, target_project_url: Optional[str] = None)
         await page.goto(proj_url, wait_until="domcontentloaded")
         await page.wait_for_timeout(2000)
 
-    # 2. Hacer clic en el botón '+' de la barra superior (Agregar menú de contenido multimedia)
-    add_btn = page.locator('button[aria-label*="Agregar menú de contenido multimedia" i]').first
+    # 2. Hacer clic en el botón '+' de la barra superior (Agregar/Añadir menú de contenido multimedia)
+    add_btn = page.locator(
+        'button[aria-label*="Agregar menú de contenido multimedia" i], '
+        'button[aria-label*="Añadir menú de contenido multimedia" i], '
+        'button[aria-label*="Add media menu" i]'
+    ).first
     if await add_btn.count() > 0 and await add_btn.is_visible():
         await add_btn.click()
         await page.wait_for_timeout(600)
-        item = page.locator('.cdk-overlay-container [role="menuitem"]:has-text("Nueva escena"), .cdk-overlay-container button:has-text("Nueva escena")').first
+        item = page.locator(
+            '.cdk-overlay-container [role="menuitem"]:has-text("Nueva escena"), '
+            '.cdk-overlay-container button:has-text("Nueva escena"), '
+            '.cdk-overlay-container [role="menuitem"]:has-text("New scene")'
+        ).first
         if await item.count() > 0:
             await item.click()
             logger.info("✅ 'Nueva escena' seleccionada desde el menú '+'.")
@@ -263,18 +280,29 @@ async def create_new_scene(page: Page, target_project_url: Optional[str] = None)
     else:
         # Fallback: intentar mediante la pestaña 'Escenas' y clic derecho en el fondo
         logger.info("Intentando crear escena desde la vista de Escenas...")
-        escenas_nav = page.locator('mat-nav-list a:has-text("Escenas"), a[aria-label*="Escenas" i]').first
+        escenas_nav = page.locator(
+            'mat-nav-list a:has-text("Escenas"), '
+            'a[aria-label*="Escenas" i], '
+            'button:has-text("Escenas"), '
+            '[role="menuitem"]:has-text("Escenas"), '
+            '[role="tab"]:has-text("Escenas")'
+        ).first
         if await escenas_nav.count() > 0 and await escenas_nav.is_visible():
             await escenas_nav.click()
             await page.wait_for_timeout(2000)
-            viewport = page.viewport_size or {'width': 1280, 'height': 800}
-            await page.mouse.click(viewport['width'] * 0.85, viewport['height'] * 0.4, button='right')
-            await page.wait_for_timeout(800)
-            item = page.locator('.cdk-overlay-container [role="menuitem"]:has-text("Nueva escena"), .cdk-overlay-container button:has-text("Nueva escena")').first
-            if await item.count() > 0:
-                await item.click()
-                logger.info("✅ 'Nueva escena' creada vía clic derecho.")
-                await page.wait_for_timeout(3000)
+        viewport = page.viewport_size or {'width': 1280, 'height': 800}
+        await page.mouse.click(viewport['width'] * 0.85, viewport['height'] * 0.4, button='right')
+        await page.wait_for_timeout(800)
+        item = page.locator(
+            '.cdk-overlay-container [role="menuitem"]:has-text("Nueva escena"), '
+            '.cdk-overlay-container button:has-text("Nueva escena"), '
+            '[role="menuitem"]:has-text("Nueva escena"), '
+            'button:has-text("Nueva escena")'
+        ).first
+        if await item.count() > 0 and await item.is_visible():
+            await item.click()
+            logger.info("✅ 'Nueva escena' creada vía clic derecho.")
+            await page.wait_for_timeout(3000)
 
     # 3. Cerrar tooltip de bienvenida si aparece
     entendido = page.locator('button:has-text("Entendido")')
@@ -348,9 +376,24 @@ async def open_media_picker(page: Page) -> bool:
     clips_count = await clips.count()
 
     if clips_count == 0:
-        empty_add = page.locator('button[aria-label="Agregar clip"]').first
+        empty_add = page.locator(
+            'button[aria-label*="Agregar clip" i], '
+            'button[aria-label*="Añadir clip" i], '
+            'button[aria-label*="Add clip" i], '
+            'button.add-clip-button'
+        ).first
         if await empty_add.count() > 0:
             await empty_add.click()
+            await page.wait_for_timeout(600)
+            # Si se abre un submenú desplegable, pulsar 'Agregar clip' / 'Añadir clip'
+            await page.evaluate('''() => {
+                const all = Array.from(document.querySelectorAll('.cdk-overlay-container *'));
+                const item = all.reverse().find(el => {
+                    const txt = (el.innerText || '').trim();
+                    return (txt.includes('Agregar clip') || txt.includes('Añadir clip') || txt.includes('Add clip')) && el.children.length <= 1;
+                });
+                if (item) item.click();
+            }''')
             await page.wait_for_timeout(1000)
     else:
         last_clip = clips.nth(clips_count - 1)
@@ -361,7 +404,12 @@ async def open_media_picker(page: Page) -> bool:
         await page.wait_for_timeout(400)
 
         clicked_add_btn = await page.evaluate('''() => {
-            const addBtn = document.querySelector('button.add-clip-button, flow-scene-timeline button[aria-label*="Agregar" i]');
+            const addBtn = document.querySelector(
+                'button.add-clip-button, ' +
+                'flow-scene-timeline button[aria-label*="Agregar" i], ' +
+                'flow-scene-timeline button[aria-label*="Añadir" i], ' +
+                'flow-scene-timeline button[aria-label*="Add" i]'
+            );
             if (addBtn) { addBtn.click(); return true; }
             return false;
         }''')
@@ -379,7 +427,7 @@ async def open_media_picker(page: Page) -> bool:
             const all = Array.from(document.querySelectorAll('.cdk-overlay-container *'));
             const item = all.reverse().find(el => {
                 const txt = (el.innerText || '').trim();
-                return txt.includes('Agregar clip') && el.children.length <= 1;
+                return (txt.includes('Agregar clip') || txt.includes('Añadir clip') || txt.includes('Add clip')) && el.children.length <= 1;
             });
             if (item) item.click();
         }''')
@@ -412,7 +460,11 @@ async def add_clip_by_index(page: Page, index: int, label: str) -> bool:
     await target_btn.click()
     await page.wait_for_timeout(800)
 
-    confirm = page.locator('button:has-text("Agregar contenido multimedia")').first
+    confirm = page.locator(
+        'button:has-text("Agregar contenido multimedia"), '
+        'button:has-text("Añadir contenido multimedia"), '
+        'button:has-text("Add media")'
+    ).first
     try:
         await confirm.wait_for(state="visible", timeout=4000)
         await confirm.click()
@@ -421,7 +473,10 @@ async def add_clip_by_index(page: Page, index: int, label: str) -> bool:
         return True
     except Exception:
         confirmed_js = await page.evaluate('''() => {
-            const btn = Array.from(document.querySelectorAll('button')).find(b => (b.innerText || '').includes('Agregar contenido multimedia'));
+            const btn = Array.from(document.querySelectorAll('button')).find(b => {
+                const t = b.innerText || '';
+                return t.includes('Agregar contenido multimedia') || t.includes('Añadir contenido multimedia') || t.includes('Add media');
+            });
             if (btn) { btn.click(); return true; }
             return false;
         }''')
@@ -576,6 +631,7 @@ async def run_full_pipeline(
     no_assemble: bool = False,
     provider: Optional[str] = None,
     skip_sound: bool = False,
+    only_assemble: bool = False,
 ):
     from config_archetypes import ArchetypeRegistry
     archetype_cfg = ArchetypeRegistry.get_archetype_config(archetype)
@@ -583,6 +639,9 @@ async def run_full_pipeline(
     target_project_url = archetype_cfg["flow_project_url"]
     char_ingredient = archetype_cfg["character_name"]
     prompt_builder_cls = archetype_cfg["prompt_builder"]
+
+    if only_assemble and not episode_file and not isinstance(episode_input, dict):
+        resume_last = True
 
     p = await async_playwright().start()
     browser = await p.chromium.connect_over_cdp(CDP_URL)
@@ -720,34 +779,37 @@ async def run_full_pipeline(
         target_project_url = page.url
 
     # FASE 1: GENERACIÓN DE CLIPS EN FLOW
-    await ensure_project_page(page, target_project_url=target_project_url)
-    await ensure_generation_settings(page)
+    if only_assemble:
+        logger.info("\n⏭️ [FASE 1 OMITIDA] Modo --only-assemble activo: pasando directo al ensamble de las 3 tomas existentes...")
+    else:
+        await ensure_project_page(page, target_project_url=target_project_url)
+        await ensure_generation_settings(page)
 
-    generated_count = 0
-    for i, sc in enumerate(scenes):
-        scene_num = i + 1
-        if scenes_filter and scene_num not in scenes_filter:
-            logger.info(f"⏭️ [SALTANDO TOMA {scene_num}/{len(scenes)}] '{sc['title']}' según filtro --scenes {scenes_filter}")
-            continue
+        generated_count = 0
+        for i, sc in enumerate(scenes):
+            scene_num = i + 1
+            if scenes_filter and scene_num not in scenes_filter:
+                logger.info(f"⏭️ [SALTANDO TOMA {scene_num}/{len(scenes)}] '{sc['title']}' según filtro --scenes {scenes_filter}")
+                continue
 
-        take_id = sc["id"]
-        take_title = sc["title"]
-        prompt = prompt_builder_cls.build_scene_by_id(take_id, scenes=scenes)
+            take_id = sc["id"]
+            take_title = sc["title"]
+            prompt = prompt_builder_cls.build_scene_by_id(take_id, scenes=scenes)
 
-        logger.info(f"\n▶️ [PASO {scene_num}/{len(scenes)}] Preparando generación para: {take_title}")
-        await ensure_character_ingredient(page, character_name=char_ingredient)
-        success = await inject_and_generate_take(page, prompt, take_title)
-        if not success:
-            logger.error(f"Fallo en la generación de {take_title}. Deteniendo pipeline.")
-            await browser.close()
-            await p.stop()
-            return
+            logger.info(f"\n▶️ [PASO {scene_num}/{len(scenes)}] Preparando generación para: {take_title}")
+            await ensure_character_ingredient(page, character_name=char_ingredient)
+            success = await inject_and_generate_take(page, prompt, take_title)
+            if not success:
+                logger.error(f"Fallo en la generación de {take_title}. Deteniendo pipeline.")
+                await browser.close()
+                await p.stop()
+                return
 
-        generated_count += 1
-        # Pausa breve entre tomas
-        await page.wait_for_timeout(3000)
+            generated_count += 1
+            # Pausa breve entre tomas
+            await page.wait_for_timeout(3000)
 
-    logger.info(f"\n🎉 ¡Generación de tomas en Google Flow completada ({generated_count} tomas generadas)!")
+        logger.info(f"\n🎉 ¡Generación de tomas en Google Flow completada ({generated_count} tomas generadas)!")
 
     if no_assemble:
         logger.info("\n🛑 [ENSAMBLE OMITIDO] Se ha indicado --no-assemble. Las tomas quedan en la galería de Flow sin ensamblar.")
@@ -877,6 +939,7 @@ if __name__ == "__main__":
     parser.add_argument("--resume", "--reuse-last", action="store_true", help="Reutiliza la última historia guardada en caché (last_episode_<arquetipo>.json).")
     parser.add_argument("--provider", "-p", type=str, default=None, choices=["gemini", "opencode", "openai", "anthropic"], help="Proveedor de IA: 'gemini', 'opencode', 'openai', 'anthropic' (por defecto: auto-detectado o AI_PROVIDER en .env)")
     parser.add_argument("--no-assemble", "--skip-assemble", action="store_true", help="Solo generar los clips en Flow sin ensamblarlos en la línea de tiempo ni exportar.")
+    parser.add_argument("--only-assemble", "--assemble-only", action="store_true", help="Omitir la generación de tomas (Fase 1) y pasar directo al ensamble, exportación y publicación usando la última historia en caché.")
     parser.add_argument("--skip-sound", "--no-sound", action="store_true", help="Omitir adición de música/sonido en TikTok Studio")
 
     args = parser.parse_args()
@@ -926,7 +989,9 @@ if __name__ == "__main__":
         print(f"🧠 Modelo de IA seleccionado: {selected_model}")
     if scenes_filter_list:
         print(f"🎬 Filtro de tomas activo (--scenes): Solo se generarán {scenes_filter_list} (omitiendo el resto)")
-    if args.resume:
+    if args.only_assemble:
+        print("🎬 Modo activo: SOLO ENSAMBLE Y PUBLICACIÓN (--only-assemble)")
+    elif args.resume:
         print("🔄 Reanudando última historia guardada en caché (--resume)")
     elif args.file:
         print(f"📄 Usando archivo de historia especificado: {args.file}")
@@ -950,4 +1015,5 @@ if __name__ == "__main__":
         no_assemble=args.no_assemble,
         provider=args.provider,
         skip_sound=args.skip_sound,
+        only_assemble=args.only_assemble,
     ))
