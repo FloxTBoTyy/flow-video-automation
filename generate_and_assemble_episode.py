@@ -249,7 +249,7 @@ async def ensure_scene_editor(page: Page, scene_url: Optional[str] = None) -> bo
     return True
 
 async def create_new_scene(page: Page, target_project_url: Optional[str] = None) -> bool:
-    """Crea una nueva escena limpia directamente desde el menú '+' y la configura en 9:16 vertical."""
+    """Crea una nueva escena limpia directamente desde el menú '+' o clic derecho y la configura en 9:16 vertical."""
     logger.info("🎬 Creando nueva escena limpia en Google Flow...")
     
     # 1. Si ya estamos dentro de un /scene/, salir a la vista principal del proyecto
@@ -259,10 +259,17 @@ async def create_new_scene(page: Page, target_project_url: Optional[str] = None)
         await page.goto(proj_url, wait_until="domcontentloaded")
         await page.wait_for_timeout(2000)
 
-    # 2. Hacer clic en el botón '+' de la barra superior (Agregar/Añadir menú de contenido multimedia)
+    # Cerrar tooltip de bienvenida si aparece antes de interactuar
+    entendido = page.locator('button:has-text("Entendido")')
+    if await entendido.count() > 0 and await entendido.first.is_visible():
+        await entendido.first.click()
+        await page.wait_for_timeout(400)
+
+    # 2. Hacer clic en el botón '+' de la barra superior (es-419 / es-ES / en)
     add_btn = page.locator(
         'button[aria-label*="Agregar menú de contenido multimedia" i], '
         'button[aria-label*="Añadir menú de contenido multimedia" i], '
+        'button[aria-label*="Menú para añadir contenido multimedia" i], '
         'button[aria-label*="Add media menu" i]'
     ).first
     if await add_btn.count() > 0 and await add_btn.is_visible():
@@ -271,14 +278,22 @@ async def create_new_scene(page: Page, target_project_url: Optional[str] = None)
         item = page.locator(
             '.cdk-overlay-container [role="menuitem"]:has-text("Nueva escena"), '
             '.cdk-overlay-container button:has-text("Nueva escena"), '
-            '.cdk-overlay-container [role="menuitem"]:has-text("New scene")'
+            '.cdk-overlay-container [role="menuitem"]:has-text("New scene"), '
+            '.cdk-overlay-container button:has-text("New scene")'
         ).first
-        if await item.count() > 0:
+        if await item.count() > 0 and await item.is_visible():
             await item.click()
             logger.info("✅ 'Nueva escena' seleccionada desde el menú '+'.")
-            await page.wait_for_timeout(3000)
-    else:
-        # Fallback: intentar mediante la pestaña 'Escenas' y clic derecho en el fondo
+            for _ in range(12):
+                await page.wait_for_timeout(500)
+                if "/scene/" in page.url:
+                    break
+        else:
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(300)
+
+    # 2b. Fallback: ir a la vista 'Escenas' y hacer clic derecho en un espacio libre del lienzo
+    if "/scene/" not in page.url:
         logger.info("Intentando crear escena desde la vista de Escenas...")
         escenas_nav = page.locator(
             'mat-nav-list a:has-text("Escenas"), '
@@ -289,22 +304,56 @@ async def create_new_scene(page: Page, target_project_url: Optional[str] = None)
         ).first
         if await escenas_nav.count() > 0 and await escenas_nav.is_visible():
             await escenas_nav.click()
-            await page.wait_for_timeout(2000)
-        viewport = page.viewport_size or {'width': 1280, 'height': 800}
-        await page.mouse.click(viewport['width'] * 0.85, viewport['height'] * 0.4, button='right')
-        await page.wait_for_timeout(800)
-        item = page.locator(
-            '.cdk-overlay-container [role="menuitem"]:has-text("Nueva escena"), '
-            '.cdk-overlay-container button:has-text("Nueva escena"), '
-            '[role="menuitem"]:has-text("Nueva escena"), '
-            'button:has-text("Nueva escena")'
-        ).first
-        if await item.count() > 0 and await item.is_visible():
-            await item.click()
-            logger.info("✅ 'Nueva escena' creada vía clic derecho.")
-            await page.wait_for_timeout(3000)
+            await page.wait_for_timeout(1500)
 
-    # 3. Cerrar tooltip de bienvenida si aparece
+        empty_points = await page.evaluate('''() => {
+            const w = window.innerWidth || 1280;
+            const h = window.innerHeight || 800;
+            const candidates = [
+                [Math.round(w * 0.88), Math.round(h * 0.45)],
+                [Math.round(w * 0.85), Math.round(h * 0.30)],
+                [Math.round(w * 0.92), Math.round(h * 0.65)],
+                [Math.round(w * 0.78), Math.round(h * 0.50)],
+                [Math.round(w * 0.65), Math.round(h * 0.75)],
+            ];
+            const valid = [];
+            for (const [x, y] of candidates) {
+                const el = document.elementFromPoint(x, y);
+                if (!el) continue;
+                const blocked = el.closest('flow-video-tile, .media-tile, .clip, video, button, a, input, textarea, [contenteditable="true"], .ProseMirror, header, nav');
+                if (!blocked) valid.push({x, y});
+            }
+            if (valid.length === 0) valid.push({x: Math.round(w * 0.88), y: Math.round(h * 0.45)});
+            return valid;
+        }''')
+
+        for pt in empty_points:
+            await page.mouse.click(pt["x"], pt["y"], button='right')
+            await page.wait_for_timeout(800)
+            item = page.locator(
+                '.cdk-overlay-container [role="menuitem"]:has-text("Nueva escena"), '
+                '.cdk-overlay-container button:has-text("Nueva escena"), '
+                '[role="menuitem"]:has-text("Nueva escena"), '
+                'button:has-text("Nueva escena"), '
+                '.cdk-overlay-container [role="menuitem"]:has-text("New scene")'
+            ).first
+            if await item.count() > 0 and await item.is_visible():
+                await item.click()
+                logger.info("✅ 'Nueva escena' creada vía clic derecho.")
+                for _ in range(12):
+                    await page.wait_for_timeout(500)
+                    if "/scene/" in page.url:
+                        break
+                if "/scene/" in page.url:
+                    break
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(300)
+
+    if "/scene/" not in page.url:
+        logger.error(f"❌ No se pudo abrir una nueva escena en Google Flow (URL actual: {page.url}).")
+        return False
+
+    # 3. Cerrar tooltip de bienvenida si aparece dentro del editor de escena
     entendido = page.locator('button:has-text("Entendido")')
     if await entendido.count() > 0 and await entendido.first.is_visible():
         await entendido.first.click()
@@ -366,6 +415,47 @@ async def clear_timeline(page: Page):
 
     logger.info(f"Timeline limpio. Clips restantes: {await page.locator('.clip').count()}")
 
+async def _click_add_clip_submenu_option(page: Page) -> bool:
+    """Pulsa la opción 'Agregar/Añadir clip' del submenú desplegable excluyendo modales y tooltips."""
+    submenu_btn = page.locator('flow-menu-item.add-clip-option button').first
+    if await submenu_btn.count() > 0 and await submenu_btn.is_visible():
+        await submenu_btn.click()
+        return True
+
+    return await page.evaluate('''() => {
+        const direct = document.querySelector('flow-menu-item.add-clip-option button');
+        if (direct && direct.offsetParent !== null) {
+            direct.click();
+            return true;
+        }
+        const all = Array.from(document.querySelectorAll('.extend-menu-panel button, .cdk-overlay-container [role="menuitem"], .cdk-overlay-container button, .cdk-overlay-container *'));
+        const item = all.reverse().find(el => {
+            if (el.closest('mat-dialog-container, flow-media-picker-dialog, [role="dialog"], mat-tooltip-component')) {
+                return false;
+            }
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return false;
+            const txt = (el.innerText || '').trim().toLowerCase();
+            return (
+                txt.includes('agregar clip') ||
+                txt.includes('añadir clip') ||
+                txt.includes('add clip') ||
+                txt.includes('agregar archivo') ||
+                txt.includes('añadir archivo') ||
+                txt.includes('agregar contenido') ||
+                txt.includes('añadir contenido') ||
+                txt === 'agregar' ||
+                txt === 'añadir' ||
+                txt === 'insertar'
+            ) && el.children.length <= 3;
+        });
+        if (item) {
+            item.click();
+            return true;
+        }
+        return false;
+    }''')
+
 async def open_media_picker(page: Page) -> bool:
     """Abre el diálogo de medios seleccionando el clip previo para mostrar el botón '+'."""
     dialog = page.locator('mat-dialog-container, flow-media-picker-dialog, [role="dialog"]').first
@@ -377,23 +467,17 @@ async def open_media_picker(page: Page) -> bool:
 
     if clips_count == 0:
         empty_add = page.locator(
+            'button.add-clip-button, '
             'button[aria-label*="Agregar clip" i], '
             'button[aria-label*="Añadir clip" i], '
-            'button[aria-label*="Add clip" i], '
-            'button.add-clip-button'
+            'button[aria-label*="Add clip" i]'
         ).first
         if await empty_add.count() > 0:
             await empty_add.click()
             await page.wait_for_timeout(600)
-            # Si se abre un submenú desplegable, pulsar 'Agregar clip' / 'Añadir clip'
-            await page.evaluate('''() => {
-                const all = Array.from(document.querySelectorAll('.cdk-overlay-container *'));
-                const item = all.reverse().find(el => {
-                    const txt = (el.innerText || '').trim();
-                    return (txt.includes('Agregar clip') || txt.includes('Añadir clip') || txt.includes('Add clip')) && el.children.length <= 1;
-                });
-                if (item) item.click();
-            }''')
+            if await dialog.count() > 0 and await dialog.is_visible():
+                return True
+            await _click_add_clip_submenu_option(page)
             await page.wait_for_timeout(1000)
     else:
         last_clip = clips.nth(clips_count - 1)
@@ -403,16 +487,38 @@ async def open_media_picker(page: Page) -> bool:
             await last_clip.evaluate("el => el.click()")
         await page.wait_for_timeout(400)
 
-        clicked_add_btn = await page.evaluate('''() => {
-            const addBtn = document.querySelector(
-                'button.add-clip-button, ' +
-                'flow-scene-timeline button[aria-label*="Agregar" i], ' +
-                'flow-scene-timeline button[aria-label*="Añadir" i], ' +
-                'flow-scene-timeline button[aria-label*="Add" i]'
-            );
-            if (addBtn) { addBtn.click(); return true; }
-            return false;
-        }''')
+        add_btn_loc = page.locator(
+            'button.add-clip-button, '
+            'button[aria-label*="Agregar clip" i], '
+            'button[aria-label*="Añadir clip" i], '
+            'button[aria-label*="Add clip" i], '
+            'flow-scene-timeline button[aria-label*="Agregar" i], '
+            'flow-scene-timeline button[aria-label*="Añadir" i], '
+            'flow-scene-timeline button[aria-label*="Add" i]'
+        ).last
+
+        clicked_add_btn = False
+        if await add_btn_loc.count() > 0 and await add_btn_loc.is_visible():
+            try:
+                await add_btn_loc.click(timeout=2000)
+                clicked_add_btn = True
+            except Exception:
+                pass
+
+        if not clicked_add_btn:
+            clicked_add_btn = await page.evaluate('''() => {
+                const addBtn = document.querySelector(
+                    'button.add-clip-button, ' +
+                    'button[aria-label*="Agregar clip" i], ' +
+                    'button[aria-label*="Añadir clip" i], ' +
+                    'button[aria-label*="Add clip" i], ' +
+                    'flow-scene-timeline button[aria-label*="Agregar" i], ' +
+                    'flow-scene-timeline button[aria-label*="Añadir" i], ' +
+                    'flow-scene-timeline button[aria-label*="Add" i]'
+                );
+                if (addBtn) { addBtn.click(); return true; }
+                return false;
+            }''')
 
         if not clicked_add_btn:
             box = await last_clip.bounding_box()
@@ -423,14 +529,9 @@ async def open_media_picker(page: Page) -> bool:
                 await page.wait_for_timeout(500)
 
         await page.wait_for_timeout(400)
-        await page.evaluate('''() => {
-            const all = Array.from(document.querySelectorAll('.cdk-overlay-container *'));
-            const item = all.reverse().find(el => {
-                const txt = (el.innerText || '').trim();
-                return (txt.includes('Agregar clip') || txt.includes('Añadir clip') || txt.includes('Add clip')) && el.children.length <= 1;
-            });
-            if (item) item.click();
-        }''')
+        if await dialog.count() > 0 and await dialog.is_visible():
+            return True
+        await _click_add_clip_submenu_option(page)
         await page.wait_for_timeout(1200)
 
     for _ in range(12):
@@ -456,34 +557,71 @@ async def add_clip_by_index(page: Page, index: int, label: str) -> bool:
         logger.error(f"Índice {index} fuera de rango ({count} clips).")
         return False
 
-    target_btn = asset_buttons.nth(index)
-    await target_btn.click()
-    await page.wait_for_timeout(800)
+    confirm = dialog.locator(
+        'button.detail-add-to-prompt-btn, '
+        'button:not(.asset-item):has-text("Agregar contenido"), '
+        'button:not(.asset-item):has-text("Añadir contenido"), '
+        'button:not(.asset-item):has-text("Añadir archivo"), '
+        'button:not(.asset-item):has-text("Agregar archivo"), '
+        'button:not(.asset-item):has-text("Insertar"), '
+        'button:not(.asset-item):has-text("Add media")'
+    ).last
 
-    confirm = page.locator(
-        'button:has-text("Agregar contenido multimedia"), '
-        'button:has-text("Añadir contenido multimedia"), '
-        'button:has-text("Add media")'
-    ).first
+    target_btn = asset_buttons.nth(index)
+    btn_classes = (await target_btn.get_attribute("class")) or ""
+    if "asset-item-active" not in btn_classes:
+        await target_btn.click()
+        await page.wait_for_timeout(800)
+    elif await confirm.count() == 0 or not await confirm.is_visible():
+        await target_btn.click()
+        await page.wait_for_timeout(800)
+
     try:
         await confirm.wait_for(state="visible", timeout=4000)
+        btn_txt = (await confirm.inner_text()).strip().replace("\n", " ")
         await confirm.click()
-        logger.info(f"✅ {label} añadido exitosamente.")
+        logger.info(f"✅ {label} añadido exitosamente (botón: '{btn_txt}').")
         await page.wait_for_timeout(2500)
         return True
     except Exception:
         confirmed_js = await page.evaluate('''() => {
-            const btn = Array.from(document.querySelectorAll('button')).find(b => {
-                const t = b.innerText || '';
-                return t.includes('Agregar contenido multimedia') || t.includes('Añadir contenido multimedia') || t.includes('Add media');
+            const dlg = document.querySelector('mat-dialog-container, flow-media-picker-dialog, [role="dialog"]');
+            if (!dlg) return null;
+            const primary = dlg.querySelector('button.detail-add-to-prompt-btn');
+            if (primary && !primary.disabled) {
+                const txt = (primary.innerText || '').trim();
+                primary.click();
+                return txt || 'detail-add-to-prompt-btn';
+            }
+            const btns = Array.from(dlg.querySelectorAll('button:not(.asset-item)'));
+            const btn = btns.reverse().find(b => {
+                const t = (b.innerText || '').trim().toLowerCase();
+                return !b.disabled && (
+                    t.includes('agregar') || t.includes('añadir') || t.includes('insertar') || t.includes('add media')
+                );
             });
-            if (btn) { btn.click(); return true; }
-            return false;
+            if (btn) {
+                const txt = (btn.innerText || '').trim();
+                btn.click();
+                return txt || 'OK';
+            }
+            return null;
         }''')
         if confirmed_js:
-            logger.info(f"✅ {label} añadido vía JS.")
+            logger.info(f"✅ {label} añadido vía JS (botón: '{confirmed_js}').")
             await page.wait_for_timeout(2500)
             return True
+
+        dlg_btns = await page.evaluate('''() => {
+            const dlg = document.querySelector('mat-dialog-container, flow-media-picker-dialog, [role="dialog"]');
+            if (!dlg) return ['NO_DIALOG'];
+            return Array.from(dlg.querySelectorAll('button:not(.asset-item)')).map(b => ({
+                text: (b.innerText || '').trim().replace(/\\n+/g, ' '),
+                aria: b.getAttribute('aria-label') || '',
+                disabled: b.disabled
+            }));
+        }''')
+        logger.warning(f"⚠️ No se encontró botón de confirmación en el modal para {label}. Botones del modal: {dlg_btns}")
 
     return False
 
@@ -817,7 +955,11 @@ async def run_full_pipeline(
 
     # FASE 2: ENSAMBLE EN LA LÍNEA DE TIEMPO DE ESCENAS (NUEVA ESCENA 9:16)
     logger.info("\n🎬 [FASE DE ENSAMBLE] Creando nueva escena limpia en formato 9:16 vertical...")
-    await create_new_scene(page, target_project_url=target_project_url)
+    if not await create_new_scene(page, target_project_url=target_project_url):
+        logger.error("No se pudo abrir el editor de nueva escena. Deteniendo pipeline.")
+        await browser.close()
+        await p.stop()
+        return
     await page.wait_for_timeout(1000)
 
     # 2. Agregar los clips generados en orden cronológico narrativo:
