@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # run_daily.sh - Ejecución programada del pipeline de Cuy para cron en Linux
 
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.local/bin"
+
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$BASE_DIR" || exit 1
 
