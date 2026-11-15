@@ -272,6 +272,10 @@ async def create_new_scene(page: Page, target_project_url: Optional[str] = None)
         'button[aria-label*="Menú para añadir contenido multimedia" i], '
         'button[aria-label*="Add media menu" i]'
     ).first
+    try:
+        await add_btn.wait_for(state="visible", timeout=10000)
+    except Exception:
+        pass
     if await add_btn.count() > 0 and await add_btn.is_visible():
         await add_btn.click()
         await page.wait_for_timeout(600)
